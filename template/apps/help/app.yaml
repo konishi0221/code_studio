@@ -6,4 +6,7 @@ SERVICE: help-api
 SA: help-run
 HAS_DB: "false"
 HAS_BUCKET: "false"
-CLOUDBUILD: apps/help/cloudbuild.yaml
+CLOUDBUILD: template/apps/help/cloudbuild.yaml
+# Rebuild help-api when the system docs change (Gemini's knowledge base).
+# Paths are relative to the template/ directory.
+EXTRA_TRIGGER_FILES: CLAUDE.md README.md DEPLOY.md
