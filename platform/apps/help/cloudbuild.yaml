@@ -1,11 +1,11 @@
-# template/apps/help/cloudbuild.yaml
+# platform/apps/help/cloudbuild.yaml
 #
 # Cloud Build トリガから呼ばれる。発火条件: main push かつ
-# template/apps/help/** または template/{CLAUDE,README,DEPLOY}.md 変更時。
+# platform/apps/help/** または platform/{CLAUDE,README,DEPLOY}.md 変更時。
 #
 # ステップ:
-#   1. bundle-docs : template/{CLAUDE,README,DEPLOY}.md を
-#                    template/apps/help/server/docs/ にコピー
+#   1. bundle-docs : platform/{CLAUDE,README,DEPLOY}.md を
+#                    platform/apps/help/server/docs/ にコピー
 #                    (Gemini が読む system prompt のソース)
 #   2. build       : Kaniko で Docker build & push
 #   3. deploy      : Cloud Run にデプロイ
@@ -35,15 +35,15 @@ steps:
       - -c
       - |
         set -e
-        mkdir -p template/apps/help/server/docs
+        mkdir -p platform/apps/help/server/docs
         # 配布テンプレが持つ運用ドキュメントを Gemini の知識ベースに。
         # ファイルが無くてもビルドは止めない (best-effort)。
         for f in CLAUDE.md README.md DEPLOY.md; do
-          if [ -f "template/$f" ]; then
-            cp "template/$f" "template/apps/help/server/docs/$f"
-            echo "  bundled: $f ($(wc -c < template/apps/help/server/docs/$f) bytes)"
+          if [ -f "platform/$f" ]; then
+            cp "platform/$f" "platform/apps/help/server/docs/$f"
+            echo "  bundled: $f ($(wc -c < platform/apps/help/server/docs/$f) bytes)"
           else
-            echo "  skip: template/$f (not found)"
+            echo "  skip: platform/$f (not found)"
           fi
         done
 
@@ -52,7 +52,7 @@ steps:
     args:
       - --destination=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP}:$BUILD_ID
       - --destination=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP}:latest
-      - --context=dir://template/apps/${_APP}/server
+      - --context=dir://platform/apps/${_APP}/server
       - --cache=true
       - --cache-ttl=336h
       - --cache-repo=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_APP}-cache
@@ -102,7 +102,7 @@ steps:
         echo "API_BASE_HELP = $$RUN_URL"
         # 既存の apps/config.js を破壊せず、help 専用の変数を追記。
         # ランチャー側は window.API_BASE_HELP を読む。
-        CFG=template/apps/config.js
+        CFG=platform/apps/config.js
         touch $$CFG
         # 既存の API_BASE_HELP 行を消してから追記 (冪等)
         grep -v 'API_BASE_HELP' $$CFG > $$CFG.tmp || true
@@ -136,7 +136,7 @@ steps:
         npm install -g firebase-tools@13 --silent --no-audit --no-fund
         firebase deploy --only hosting \
           --project=$PROJECT_ID \
-          --config=template/firebase.json \
+          --config=platform/firebase.json \
           --non-interactive
 
 options:

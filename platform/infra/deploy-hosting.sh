@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# template/infra/deploy-hosting.sh
+# platform/infra/deploy-hosting.sh
 #
 # Firebase Hosting への **手動** デプロイの唯一の正規ルート。
 # 直接 `firebase deploy --only hosting` を打つと、ローカル clone が古い時に
@@ -11,19 +11,19 @@
 #   3. firebase deploy --only hosting
 #
 # Usage:
-#   PROJECT_ID=<project> bash template/infra/deploy-hosting.sh
-#   PROJECT_ID=<project> APP=help bash template/infra/deploy-hosting.sh
+#   PROJECT_ID=<project> bash platform/infra/deploy-hosting.sh
+#   PROJECT_ID=<project> APP=help bash platform/infra/deploy-hosting.sh
 
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${REGION:-asia-northeast1}"
 APP="${APP:-}"                        # optional: refresh this app's API_BASE in config.js
-TEMPLATE_REL="${TEMPLATE_REL:-template}"
+BASE_DIR="${BASE_DIR:-platform}"
 
 if [[ -z "$PROJECT_ID" ]]; then
   echo "❌ PROJECT_ID 未設定" >&2
-  echo "   解決: PROJECT_ID=<your-project> bash template/infra/deploy-hosting.sh" >&2
+  echo "   解決: PROJECT_ID=<your-project> bash platform/infra/deploy-hosting.sh" >&2
   exit 1
 fi
 
@@ -62,7 +62,7 @@ if [[ -n "$APP" ]]; then
     exit 1
   fi
   echo "  API_BASE_${APP^^} = $RUN_URL"
-  CFG="${TEMPLATE_REL}/apps/config.js"
+  CFG="${BASE_DIR}/apps/config.js"
   touch "$CFG"
   # Remove any prior line for this app, then append the fresh one.
   grep -v "API_BASE_${APP^^}" "$CFG" > "$CFG.tmp" || true
@@ -73,7 +73,7 @@ fi
 echo "▶ firebase deploy --only hosting..."
 firebase deploy --only hosting \
   --project="$PROJECT_ID" \
-  --config="${TEMPLATE_REL}/firebase.json" \
+  --config="${BASE_DIR}/firebase.json" \
   --non-interactive
 
 echo "✅ Hosting deploy 完了"

@@ -67,7 +67,7 @@ Claude が作業ブランチで作業 → main に push → トリガ発火 → 
 
 #### `apps/help/cloudbuild.yaml` のステップ
 
-1. **bundle-docs** — `template/{CLAUDE,README,DEPLOY}.md` を `apps/help/server/docs/` にコピー (Gemini の system prompt のソース)
+1. **bundle-docs** — `platform/{CLAUDE,README,DEPLOY}.md` を `apps/help/server/docs/` にコピー (Gemini の system prompt のソース)
 2. **build** — Kaniko で `apps/help/server` を Docker build & push
 3. **deploy** — Cloud Run `help-api` にデプロイ (`--no-allow-unauthenticated` で IAM 必須、`allUsers` invoker は prep-config で付与)
 4. **prep-config** — `allUsers` invoker 付与・Cloud Run URL を `apps/config.js` に注入

@@ -5,10 +5,10 @@
 #  Designed to run in Cloud Shell (cloud-sql-proxy pre-installed).
 #
 #  Usage:
-#    bash template/infra/db.sh <app-name>                         # interactive psql
-#    bash template/infra/db.sh <app-name> < schema.sql            # apply file
-#    bash template/infra/db.sh <app-name> -c "\dt"                # one command
-#    bash template/infra/db.sh <app-name> -c "SELECT * FROM records LIMIT 5"
+#    bash platform/infra/db.sh <app-name>                         # interactive psql
+#    bash platform/infra/db.sh <app-name> < schema.sql            # apply file
+#    bash platform/infra/db.sh <app-name> -c "\dt"                # one command
+#    bash platform/infra/db.sh <app-name> -c "SELECT * FROM records LIMIT 5"
 # ============================================================
 set -euo pipefail
 
@@ -18,7 +18,7 @@ if [[ -z "$APP" ]]; then
   echo "Example:" >&2
   echo "  $0 sample" >&2
   echo "  $0 sample -c '\\dt'" >&2
-  echo "  $0 sample < template/apps/sample/infra/schema.sql" >&2
+  echo "  $0 sample < platform/apps/sample/infra/schema.sql" >&2
   exit 1
 fi
 shift

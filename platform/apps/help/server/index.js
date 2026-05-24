@@ -21,7 +21,7 @@ const allowList = ALLOWED_EMAILS.split(",").map((s) => s.trim().toLowerCase()).f
 
 // ──────────────────────────────────────────
 // このシステムの知識をビルド時にバンドルした docs/ から読み込む。
-// cloudbuild.yaml が template/CLAUDE.md / README.md / DEPLOY.md を
+// cloudbuild.yaml が platform/CLAUDE.md / README.md / DEPLOY.md を
 // この docs/ にコピーしてから kaniko build する。
 // ──────────────────────────────────────────
 async function loadDocs() {

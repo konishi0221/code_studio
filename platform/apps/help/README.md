@@ -52,7 +52,7 @@ help/
     ├── package.json
     ├── Dockerfile
     ├── .dockerignore
-    └── docs/           ← ビルド時に template/*.md がコピーされる (git では空)
+    └── docs/           ← ビルド時に platform/*.md がコピーされる (git では空)
 ```
 
 ## 設定値

@@ -4,14 +4,14 @@
 #  Run in Cloud Shell. Idempotent — safe to re-run.
 #
 #  Provisions shared resources, then per-app resources for
-#  every directory under template/apps/ that contains an app.yaml.
+#  every directory under platform/apps/ that contains an app.yaml.
 #
 #  Usage:
 #    PROJECT_ID=<your-project> \
 #    OWNER_EMAIL=<your-email>  \
 #    GITHUB_OWNER=<your-github-user-or-org> \
 #    GITHUB_REPO=<your-repo-name> \
-#      bash template/infra/bootstrap.sh
+#      bash platform/infra/bootstrap.sh
 #
 #  Or, equivalently, set them interactively when prompted.
 # ============================================================
@@ -23,9 +23,10 @@ set -euo pipefail
 REGION="${REGION:-asia-northeast1}"
 REPO_NAME="${REPO_NAME:-claude-studio}"             # Artifact Registry repo (Docker images)
 DB_INSTANCE="${DB_INSTANCE:-claude-studio-db}"      # Cloud SQL instance name
-# Path from repo root to the template directory. Override if you flattened
-# the template (e.g. moved its contents to repo root).
-TEMPLATE_REL="${TEMPLATE_REL:-template}"
+# Path from repo root to the deployable directory (the one containing
+# apps/, infra/, firebase.json). Defaults to "platform" because this script
+# lives at platform/infra/bootstrap.sh.
+BASE_DIR="${BASE_DIR:-platform}"
 HOSTING_SITE="${HOSTING_SITE:-}"                    # Firebase Hosting site id (globally unique)
 
 step() { printf "\n\033[1;33m▶ %s\033[0m\n" "$*"; }
@@ -53,7 +54,7 @@ if [[ -z "$HOSTING_SITE" ]]; then
   sub "Hosting site id not specified; defaulting to: $HOSTING_SITE"
 fi
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"        # = template/
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"        # = platform/
 REPO_ROOT="$(cd "$ROOT_DIR/.." && pwd)"             # = repo root
 
 gcloud config set project "$PROJECT_ID"
@@ -98,18 +99,36 @@ else
   sub "already exists. To rotate: echo -n <key> | gcloud secrets versions add gemini-api-key --data-file=-"
 fi
 
-step "Shared Cloud SQL instance: ${DB_INSTANCE}"
-if ! gcloud sql instances describe "$DB_INSTANCE" >/dev/null 2>&1; then
-  ROOT_PW="$(openssl rand -base64 24)"
-  gcloud sql instances create "$DB_INSTANCE" \
-    --database-version=POSTGRES_15 \
-    --tier=db-f1-micro \
-    --region="$REGION" \
-    --storage-size=10GB \
-    --storage-auto-increase \
-    --no-backup \
-    --root-password="$ROOT_PW"
-  sub "Postgres superuser password (save this!): ${ROOT_PW}"
+# Only create the shared Cloud SQL instance if at least one app declares
+# HAS_DB=true. Cloud SQL db-f1-micro costs ~$9/month even idle, so skipping
+# it when no app needs DB matters for solo/learning setups.
+NEEDS_DB=false
+for APP_YAML in "$ROOT_DIR"/apps/*/app.yaml; do
+  [[ -f "$APP_YAML" ]] || continue
+  # Match HAS_DB: "true" or HAS_DB: true (with or without quotes).
+  if grep -Eq '^[[:space:]]*HAS_DB:[[:space:]]*"?true"?[[:space:]]*(#.*)?$' "$APP_YAML"; then
+    NEEDS_DB=true
+    break
+  fi
+done
+
+if [[ "$NEEDS_DB" == "true" ]]; then
+  step "Shared Cloud SQL instance: ${DB_INSTANCE}"
+  if ! gcloud sql instances describe "$DB_INSTANCE" >/dev/null 2>&1; then
+    ROOT_PW="$(openssl rand -base64 24)"
+    gcloud sql instances create "$DB_INSTANCE" \
+      --database-version=POSTGRES_15 \
+      --tier=db-f1-micro \
+      --region="$REGION" \
+      --storage-size=10GB \
+      --storage-auto-increase \
+      --no-backup \
+      --root-password="$ROOT_PW"
+    sub "Postgres superuser password (save this!): ${ROOT_PW}"
+  fi
+else
+  step "Cloud SQL: skipped (no app declares HAS_DB=true)"
+  sub "Add HAS_DB: \"true\" to an app.yaml and re-run to provision."
 fi
 
 step "Grant Cloud Build SA the roles it needs"
@@ -141,7 +160,7 @@ step "Ensure Firebase Hosting service identity exists"
 gcloud beta services identity create --service=firebasehosting.googleapis.com >/dev/null 2>&1 || true
 
 # ────────────────────────────────────────────────────────────
-# Per-app loop: read template/apps/*/app.yaml, provision resources,
+# Per-app loop: read platform/apps/*/app.yaml, provision resources,
 # create Cloud Build trigger.
 # ────────────────────────────────────────────────────────────
 
@@ -166,8 +185,8 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
   BUCKET="${APP_BUCKET:-${PROJECT_ID}-${APP}-receipts}"
   HAS_DB="${APP_HAS_DB:-true}"
   HAS_BUCKET="${APP_HAS_BUCKET:-true}"
-  CLOUDBUILD_REL="${APP_CLOUDBUILD:-${TEMPLATE_REL}/apps/${APP}/cloudbuild.yaml}"
-  # Additional files (under template/) that should trigger a rebuild,
+  CLOUDBUILD_REL="${APP_CLOUDBUILD:-${BASE_DIR}/apps/${APP}/cloudbuild.yaml}"
+  # Additional files (under platform/) that should trigger a rebuild,
   # space-separated. The base trigger pattern always includes apps/${APP}/**.
   EXTRA_TRIGGER_FILES="${APP_EXTRA_TRIGGER_FILES:-}"
 
@@ -195,7 +214,7 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
       DB_PW_VAL="$(gcloud secrets versions access latest --secret="$DB_PW_SECRET")"
       PGPASSWORD="$DB_PW_VAL" gcloud sql connect "$DB_INSTANCE" --user="$DB_USER" --database="$DB_NAME" --quiet \
         < "${APP_DIR}infra/schema.sql" 2>/dev/null || \
-        sub "↑ skipped — apply manually with: bash ${TEMPLATE_REL}/infra/db.sh ${APP} < ${APP_DIR}infra/schema.sql"
+        sub "↑ skipped — apply manually with: bash ${BASE_DIR}/infra/db.sh ${APP} < ${APP_DIR}infra/schema.sql"
     fi
   fi
 
@@ -255,10 +274,10 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
   # Trigger fires on push to main, only when files matching included-files change.
   sub "Cloud Build trigger ${SERVICE}-deploy (global, main only)"
 
-  # Compose included-files: base apps/${APP}/** plus any extras (resolved to template/-prefixed paths).
-  INCLUDED_FILES="${TEMPLATE_REL}/apps/${APP}/**"
+  # Compose included-files: base apps/${APP}/** plus any extras (resolved to platform/-prefixed paths).
+  INCLUDED_FILES="${BASE_DIR}/apps/${APP}/**"
   for extra in $EXTRA_TRIGGER_FILES; do
-    INCLUDED_FILES="${INCLUDED_FILES},${TEMPLATE_REL}/${extra}"
+    INCLUDED_FILES="${INCLUDED_FILES},${BASE_DIR}/${extra}"
   done
 
   if gcloud builds triggers describe "${SERVICE}-deploy" >/dev/null 2>&1; then
@@ -296,7 +315,7 @@ cat <<EOF
        https://${HOSTING_SITE}.web.app/__/auth/handler
 
   4. First manual deploy of any app:
-       gcloud builds submit --config=${TEMPLATE_REL}/apps/<app>/cloudbuild.yaml --region=${REGION} .
+       gcloud builds submit --config=${BASE_DIR}/apps/<app>/cloudbuild.yaml --region=${REGION} .
 
   5. Service URLs:
        gcloud run services list --region=${REGION}

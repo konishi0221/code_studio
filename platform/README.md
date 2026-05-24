@@ -1,11 +1,13 @@
-# <PROJECT_NAME> (claude-studio template)
+# claude-studio platform
 
-Claude Code でミニアプリを次々作るための GCP テンプレート。
+Claude Code で個人・小規模チーム向けのミニアプリを次々作るための GCP プラットフォーム本体。
 `apps/<アプリID>/` を 1 ディレクトリ追加するだけで新しいアプリが立ち上がる。
 
 `main` に push すれば Cloud Build トリガで自動デプロイ → `https://<HOSTING_SITE>.web.app` で公開。
 
-> 🚧 このファイルはテンプレートの雛形です。`bootstrap.sh` を走らせた後、`<...>` プレースホルダを実値に置換するか、自分の言葉で書き直してください。
+> このディレクトリ (`platform/`) は claude-studio の運営側 Web 本体。
+> 将来 wizard が各ユーザーの GCP に展開する「ユーザー向けテンプレ」は `template/` (リポ root の兄弟ディレクトリ、未着手)。
+> 両者は同じ launcher / Cloud Run / Cloud SQL 構成を共有する設計だが、デプロイ先 GCP プロジェクトが別。
 
 ---
 
