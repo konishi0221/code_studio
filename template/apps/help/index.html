@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>AIヘルプ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@40,400,0,0">
+<style>
+.icon { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; display: inline-block; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #e4e6ee; --bg2: #d8dae4; --bg3: #ededf3;
+  --sl: rgba(255,255,255,1); --sd: rgba(168,172,192,0.75);
+  --text: #42455e; --text2: rgba(66,69,94,0.42); --text3: rgba(66,69,94,0.22);
+  --accent: #4961ff;
+}
+body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; overflow: hidden; }
+
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: 50px 18px 12px; gap: 10px; flex-shrink: 0; }
+.back, .clear { background: var(--bg); border: none; padding: 10px 16px; border-radius: 24px; font-family: 'Outfit',sans-serif; font-size: 12px; font-weight: 700; color: var(--text2); cursor: pointer; box-shadow: 5px 5px 12px var(--sd), -5px -5px 12px var(--sl); }
+.back:active, .clear:active { box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl); transform: scale(0.96); }
+.title-bar { flex: 1; text-align: center; font-size: 14px; font-weight: 800; letter-spacing: 0.04em; }
+
+.thread { flex: 1; overflow-y: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
+
+.msg { max-width: 88%; padding: 14px 16px; border-radius: 20px; font-size: 14px; line-height: 1.6; word-wrap: break-word; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: var(--accent); color: white; box-shadow: 4px 4px 12px var(--sd); border-bottom-right-radius: 6px; }
+.msg.bot  { align-self: flex-start; background: var(--bg); color: var(--text); box-shadow: 4px 4px 12px var(--sd), -3px -3px 10px var(--sl); border-bottom-left-radius: 6px; }
+.msg.bot.thinking { color: var(--text2); font-style: italic; }
+.msg.error { align-self: center; background: rgba(176,64,64,0.1); color: #b04040; font-size: 12px; padding: 10px 14px; border-radius: 14px; }
+
+.greeting { align-self: center; text-align: center; padding: 30px 18px; color: var(--text2); }
+.greeting .icon { font-size: 56px; color: var(--accent); opacity: 0.7; display: block; margin-bottom: 14px; font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 48; }
+.greeting h2 { font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.greeting p { font-size: 13px; line-height: 1.7; max-width: 320px; margin: 0 auto; }
+
+.suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; align-self: stretch; padding: 0 4px; }
+.suggestion { background: var(--bg); border: none; padding: 12px 16px; border-radius: 14px; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; color: var(--text); text-align: left; cursor: pointer; box-shadow: 4px 4px 10px var(--sd), -3px -3px 8px var(--sl); }
+.suggestion:active { box-shadow: inset 3px 3px 8px var(--sd), inset -2px -2px 6px var(--sl); transform: scale(0.98); }
+
+.composer { padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); flex-shrink: 0; background: var(--bg); }
+.composer-inner { display: flex; align-items: flex-end; gap: 10px; background: var(--bg); border-radius: 26px; padding: 6px 6px 6px 16px; box-shadow: inset 4px 4px 10px var(--sd), inset -3px -3px 8px var(--sl); }
+.composer textarea { flex: 1; border: none; background: transparent; resize: none; font-family: 'Outfit', sans-serif; font-size: 14px; line-height: 1.5; color: var(--text); padding: 10px 0; max-height: 140px; outline: none; }
+.composer textarea::placeholder { color: var(--text3); }
+.send-btn { width: 44px; height: 44px; border-radius: 22px; border: none; background: var(--accent); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 3px 3px 8px var(--sd), -2px -2px 6px var(--sl); transition: opacity 0.15s, transform 0.15s; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.send-btn:not(:disabled):active { transform: scale(0.94); box-shadow: inset 2px 2px 6px rgba(0,0,0,0.2); }
+.send-btn .icon { font-size: 22px; color: white; font-variation-settings: 'FILL' 1, 'wght' 600; }
+
+@keyframes dot { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+.thinking::after { content: "···"; letter-spacing: 4px; }
+</style>
+</head>
+<body>
+
+<div class="app" id="appRoot" style="display:none;">
+  <div class="top">
+    <button class="back" onclick="location.href='/'">← 戻る</button>
+    <div class="title-bar">AIヘルプ</div>
+    <button class="clear" onclick="clearThread()">クリア</button>
+  </div>
+
+  <div class="thread" id="thread"></div>
+
+  <div class="composer">
+    <div class="composer-inner">
+      <textarea id="input" rows="1" placeholder="このシステムについて何でも聞いてください…" autocomplete="off"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+        <span class="icon">arrow_upward</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="/config.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+const STORAGE_KEY = "helpThread";
+const SUGGESTIONS = [
+  "このシステムの全体像を簡単に教えて",
+  "新しいミニアプリを追加する手順は？",
+  "Cloud Run と Hosting の違いを例え話で",
+  "git push したら何が起きる？",
+];
+
+let fbAuth = null;
+let currentUser = null;
+let thread = []; // [{role:"user"|"model", text:"..."}]
+let inflight = false;
+
+const $thread = document.getElementById("thread");
+const $input = document.getElementById("input");
+const $send = document.getElementById("sendBtn");
+
+function loadThread() {
+  try { thread = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { thread = []; }
+}
+function saveThread() { localStorage.setItem(STORAGE_KEY, JSON.stringify(thread)); }
+
+function escapeHTML(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function renderThread() {
+  $thread.innerHTML = "";
+  if (thread.length === 0) {
+    const greet = document.createElement("div");
+    greet.className = "greeting";
+    greet.innerHTML =
+      `<span class="icon">support_agent</span>` +
+      `<h2>このシステムを知ってる Gemini です</h2>` +
+      `<p>CLAUDE.md / README.md / DEPLOY.md を全部読んでます。<br>分からないことを日本語で聞いてみてください。</p>` +
+      `<div class="suggestions">` +
+        SUGGESTIONS.map(s => `<button class="suggestion" data-q="${escapeHTML(s)}">${escapeHTML(s)}</button>`).join("") +
+      `</div>`;
+    $thread.appendChild(greet);
+    greet.querySelectorAll(".suggestion").forEach(btn => {
+      btn.onclick = () => { $input.value = btn.dataset.q; updateSendState(); $input.focus(); };
+    });
+    return;
+  }
+  for (const m of thread) {
+    const div = document.createElement("div");
+    div.className = "msg " + (m.role === "user" ? "user" : "bot");
+    div.textContent = m.text;
+    $thread.appendChild(div);
+  }
+  $thread.scrollTop = $thread.scrollHeight;
+}
+
+function setInflight(on) {
+  inflight = on;
+  updateSendState();
+  if (on) {
+    const div = document.createElement("div");
+    div.id = "thinkingBubble";
+    div.className = "msg bot thinking";
+    div.textContent = "考え中";
+    $thread.appendChild(div);
+    $thread.scrollTop = $thread.scrollHeight;
+  } else {
+    document.getElementById("thinkingBubble")?.remove();
+  }
+}
+
+function updateSendState() {
+  $send.disabled = inflight || !$input.value.trim();
+}
+
+window.clearThread = () => {
+  if (!confirm("会話をクリアしますか？")) return;
+  thread = [];
+  saveThread();
+  renderThread();
+};
+
+window.sendMessage = async () => {
+  const text = $input.value.trim();
+  if (!text || inflight) return;
+  thread.push({ role: "user", text });
+  saveThread();
+  $input.value = "";
+  updateSendState();
+  renderThread();
+  setInflight(true);
+  try {
+    const token = await currentUser.getIdToken();
+    const apiBase = window.API_BASE_HELP || window.API_BASE || "";
+    const res = await fetch(apiBase + "/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + token },
+      body: JSON.stringify({ history: thread.slice(-20) }), // 直近20ターンだけ送る
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    thread.push({ role: "model", text: data.reply || "(空の応答)" });
+    saveThread();
+  } catch (e) {
+    const err = document.createElement("div");
+    err.className = "msg error";
+    err.textContent = "エラー: " + e.message;
+    setInflight(false);
+    $thread.appendChild(err);
+    return;
+  }
+  setInflight(false);
+  renderThread();
+};
+
+$input.addEventListener("input", () => {
+  $input.style.height = "auto";
+  $input.style.height = Math.min(140, $input.scrollHeight) + "px";
+  updateSendState();
+});
+$input.addEventListener("keydown", (e) => {
+  // Cmd/Ctrl + Enter で送信。Enter 単体は改行のまま (モバイル考慮)
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+(async function init() {
+  loadThread();
+  const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
+  cfg.authDomain = location.hostname;
+  fbAuth = getAuth(initializeApp(cfg));
+  onAuthStateChanged(fbAuth, (user) => {
+    if (!user) {
+      // ランチャーに飛ばす、戻り先付き
+      location.href = "/?next=" + encodeURIComponent(location.pathname);
+      return;
+    }
+    currentUser = user;
+    document.getElementById("appRoot").style.display = "flex";
+    renderThread();
+  });
+})();
+</script>
+</body>
+</html>
