@@ -53,15 +53,13 @@ git pull --ff-only origin main                          # behind なら追従
 
 ## プラットフォーム本体のデプロイ（運営側）
 
-このリポ自体を運営側 GCP プロジェクトにデプロイすると、claude-studio のプラットフォーム Web 本体が立ち上がる。
+初回セットアップ手順は **[docs/setup.md](docs/setup.md)** にスマホで読める形でまとまっている (Cloud Shell コマンド・Firebase Console 操作・所要時間付き)。
 
-```bash
-PROJECT_ID=<your-project> \
-OWNER_EMAIL=<your-email> \
-GITHUB_OWNER=<github-user> \
-GITHUB_REPO=code_studio \
-HOSTING_SITE=<unique-site-id> \
-  bash platform/infra/bootstrap.sh
-```
+要約：
+1. Cloud Shell で `bash platform/infra/bootstrap.sh` (env vars 指定)
+2. GitHub ↔ Cloud Build をブラウザで 1 タップ接続
+3. bootstrap 再実行 (トリガ作成)
+4. Firebase Auth / OAuth redirect URI を手動追加
+5. main に push → 自動デプロイ → `https://<HOSTING_SITE>.web.app` で稼働
 
-詳細は `platform/DEPLOY.md` 参照。bootstrap 後は main に push する度に Cloud Build トリガが自動デプロイする。
+詳細は [docs/setup.md](docs/setup.md) と [platform/DEPLOY.md](platform/DEPLOY.md) 参照。

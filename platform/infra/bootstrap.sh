@@ -253,25 +253,11 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
     done
   fi
 
-  # ────────────────────────────────────────────────────────
-  # Patch cloudbuild.yaml substitutions with concrete values.
-  # We do this in-place so the substitutions are git-visible (helpful when
-  # reviewing diffs after re-running bootstrap). It's idempotent — if the
-  # values already match, sed is a no-op.
-  # ────────────────────────────────────────────────────────
-  CLOUDBUILD_FILE="${REPO_ROOT}/${CLOUDBUILD_REL}"
-  if [[ -f "$CLOUDBUILD_FILE" ]]; then
-    sub "patch substitutions in ${CLOUDBUILD_REL}"
-    sed -i.bak \
-      -e "s|user:OWNER_EMAIL_PLACEHOLDER|user:${OWNER_EMAIL}|g" \
-      -e "s|_HOSTING_SITE: HOSTING_SITE_PLACEHOLDER|_HOSTING_SITE: ${HOSTING_SITE}|g" \
-      -e "s|_ALLOWED_EMAILS: \"\"|_ALLOWED_EMAILS: \"${OWNER_EMAIL}\"|g" \
-      "$CLOUDBUILD_FILE"
-    rm -f "${CLOUDBUILD_FILE}.bak"
-  fi
-
   # 1st-gen GitHub App triggers live in the global region.
   # Trigger fires on push to main, only when files matching included-files change.
+  # Deployment-specific values (owner email, hosting site id, allowed emails)
+  # are passed via the trigger's --substitutions so that cloudbuild.yaml stays
+  # generic and free of per-deployment leakage.
   sub "Cloud Build trigger ${SERVICE}-deploy (global, main only)"
 
   # Compose included-files: base apps/${APP}/** plus any extras (resolved to platform/-prefixed paths).
@@ -279,6 +265,10 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
   for extra in $EXTRA_TRIGGER_FILES; do
     INCLUDED_FILES="${INCLUDED_FILES},${BASE_DIR}/${extra}"
   done
+
+  # Trigger substitutions. Use `^||^` separator so values containing commas
+  # (e.g. multi-email ALLOWED_EMAILS) are not mis-split.
+  SUBS="^||^_INVOKER=user:${OWNER_EMAIL}||_HOSTING_SITE=${HOSTING_SITE}||_ALLOWED_EMAILS=${OWNER_EMAIL}"
 
   if gcloud builds triggers describe "${SERVICE}-deploy" >/dev/null 2>&1; then
     sub "  trigger already exists (delete & re-run to recreate)"
@@ -289,7 +279,8 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
       --repo-name="$GITHUB_REPO" \
       --branch-pattern='^main$' \
       --build-config="$CLOUDBUILD_REL" \
-      --included-files="$INCLUDED_FILES" 2>/dev/null || {
+      --included-files="$INCLUDED_FILES" \
+      --substitutions="$SUBS" 2>/dev/null || {
       sub "  ⚠ skipped — connect the GitHub repo to Cloud Build first:"
       sub "    https://console.cloud.google.com/cloud-build/triggers/connect?project=${PROJECT_ID}"
       sub "    then re-run this script."
