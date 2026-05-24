@@ -1,0 +1,12 @@
+# help : AIヘルプチャット (このシステムを知ってる Gemini)
+# Consumed by infra/bootstrap.sh to provision per-app resources.
+name: help
+display_name: AIヘルプ
+SERVICE: help-api
+SA: help-run
+HAS_DB: "false"
+HAS_BUCKET: "false"
+CLOUDBUILD: platform/apps/help/cloudbuild.yaml
+# Rebuild help-api when the system docs change (Gemini's knowledge base).
+# Paths are relative to the platform/ directory.
+EXTRA_TRIGGER_FILES: CLAUDE.md README.md DEPLOY.md
