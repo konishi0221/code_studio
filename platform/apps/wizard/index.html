@@ -466,9 +466,6 @@ import {
 // localStorage に永続化。リロード・別タブでも復元できる。
 const STORAGE_KEY = "wizard_state_v1";
 const STEPS = ["welcome", "google", "github", "quiz", "options", "confirm", "done"];
-let state = loadState();
-let fbAuth = null;
-let signinInProgress = false;
 
 function loadState() {
   const defaults = { step: "welcome", quiz: {}, ghUser: "", options: defaultOptions() };
@@ -550,6 +547,12 @@ function recommendedFor(quiz) {
   // 趣味/個人用 はミニマム
   return rec;
 }
+
+// state は COST_PLANS / defaultOptions の初期化後に作る (let を上に置くと
+// loadState 内の defaultOptions が COST_PLANS の TDZ にぶつかる)。
+let state = loadState();
+let fbAuth = null;
+let signinInProgress = false;
 
 function computeMonthlyCost(options) {
   let total = 0;

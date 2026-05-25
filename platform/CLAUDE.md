@@ -220,6 +220,34 @@ Claude Code は **絶対に `firebase deploy` を直接実行しない**。
 
 Claude が新ミニアプリ scaffold するときは index.html とセットで README.md を生成すること。
 
+### ⚠️ ESM 内の TDZ 罠 (過去事故)
+
+`<script type="module">` 内では `const` / `let` は宣言行まで TDZ (Temporal Dead Zone)。
+**関数宣言は hoisted されるが、関数の中で参照する const/let は実行時にしか解決されない**。
+
+事故パターン:
+```js
+let state = loadState();         // ← 早い段階で呼ばれる
+function loadState() {           // hoisted
+  return { options: defaultOptions() };
+}
+function defaultOptions() {      // hoisted
+  return Object.keys(COST_PLANS); // ← const の参照
+}
+const COST_PLANS = { ... };      // ← 宣言はここ → TDZ ReferenceError
+```
+
+`Object.keys(COST_PLANS)` を実行する時点で `COST_PLANS` がまだ初期化されてないと
+ReferenceError → モジュール全死 → `window.next` 等の onclick 関数が未定義 → ボタン全滅。
+
+**対策**: 即時実行される top-level の `let/const = 関数呼び出し()` の中で参照する `const` は、
+その代入より上に宣言する。並び順を以下に保つ:
+1. プリミティブ const (`STORAGE_KEY`, `STEPS` 等)
+2. データ const (`COST_PLANS` 等)
+3. 関数宣言 (`loadState`, `defaultOptions` 等)
+4. 初期化付き let (`let state = loadState()`)
+5. ハンドラ / IIFE init
+
 ---
 
 ## 6. 自己チェック (応答前に毎回確認)
