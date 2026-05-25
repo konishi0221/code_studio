@@ -75,6 +75,54 @@ function pick(obj, key, allowed) {
   return allowed.includes(v) ? v : null;
 }
 
+// ──────────────────────────────────────────
+// 構造化ログ: Firestore `wizard_runs/{id}/events` に粒度細かく書く。
+// 用途:
+//   - フロントエンド (signin, click, fetch エラー等) からも POST で送られてくる
+//   - バックエンド (validation, firestore 書き込み, 将来の各 chain step) もここに書く
+//   - フロントは GET で取り出して「詳細ログ」パネルに表示
+//   - 仕様変更 (Google OAuth 変わった等) で詰まった時、どのブロックで死んだか即わかる
+// ──────────────────────────────────────────
+const LEVELS = ["debug", "info", "warn", "error"];
+
+async function logEvent(runId, ev) {
+  try {
+    const safe = {
+      actor: ev.actor || "backend",
+      level: LEVELS.includes(ev.level) ? ev.level : "info",
+      code: String(ev.code || "").slice(0, 80),
+      message: String(ev.message || "").slice(0, 1000),
+      data: ev.data ?? null,
+      user_email: ev.user_email || "",
+      at: admin.firestore.Timestamp.now(),
+    };
+    await RUNS.doc(runId).collection("events").add(safe);
+    // Cloud Logging にも構造化で残す (cloudshell / Logs Explorer から run_id で絞り込める)
+    console.log(JSON.stringify({
+      severity: safe.level.toUpperCase(),
+      run_id: runId,
+      actor: safe.actor,
+      code: safe.code,
+      message: safe.message,
+      user_email: safe.user_email,
+    }));
+  } catch (e) {
+    console.error(`[wizard] logEvent failed run=${runId}: ${e.message}`);
+  }
+}
+
+// 共通: run へのアクセス権チェック (本人 or オーナー)
+async function getRunWithAccess(runId, user) {
+  const snap = await RUNS.doc(runId).get();
+  if (!snap.exists) return { error: { status: 404, message: "run not found" } };
+  const d = snap.data();
+  const isOwner = allowList.length && allowList.includes((user.email || "").toLowerCase());
+  if (d.user_uid !== user.uid && !isOwner) {
+    return { error: { status: 403, message: "他人の run にはアクセスできません" } };
+  }
+  return { snap, data: d, isOwner };
+}
+
 // POST /api/wizard/submit — 新しい run を作成
 app.post("/api/wizard/submit", async (req, res) => {
   const b = req.body || {};
@@ -110,20 +158,29 @@ app.post("/api/wizard/submit", async (req, res) => {
     updated_at: now,
   };
 
-  const ref = await RUNS.add(doc);
-  console.log(`[wizard] submit run=${ref.id} user=${req.user.email} goal=${survey.goal} skill=${survey.skill}`);
-  res.json({ run_id: ref.id, status: doc.status });
+  try {
+    const ref = await RUNS.add(doc);
+    await logEvent(ref.id, {
+      actor: "backend", level: "info", code: "submit.received",
+      message: `goal=${survey.goal} skill=${survey.skill} team=${survey.team} gh=${ghUser || "-"}`,
+      user_email: req.user.email,
+    });
+    await logEvent(ref.id, {
+      actor: "backend", level: "warn", code: "status.manual_required",
+      message: "自動プロビジョン未実装のため manual_required で停止。オーナーに連絡が届きます。",
+    });
+    console.log(`[wizard] submit run=${ref.id} user=${req.user.email} goal=${survey.goal} skill=${survey.skill}`);
+    res.json({ run_id: ref.id, status: doc.status });
+  } catch (e) {
+    console.error(`[wizard] submit FAILED user=${req.user.email}: ${e.message}`);
+    res.status(500).json({ error: "submit failed: " + e.message });
+  }
 });
 
 // GET /api/wizard/runs/:id — ステータス取得 (本人 or オーナーのみ)
 app.get("/api/wizard/runs/:id", async (req, res) => {
-  const snap = await RUNS.doc(req.params.id).get();
-  if (!snap.exists) return res.status(404).json({ error: "run not found" });
-  const d = snap.data();
-  const isOwner = allowList.length && allowList.includes((req.user.email || "").toLowerCase());
-  if (d.user_uid !== req.user.uid && !isOwner) {
-    return res.status(403).json({ error: "他人の run は見られません" });
-  }
+  const { snap, data: d, error } = await getRunWithAccess(req.params.id, req.user);
+  if (error) return res.status(error.status).json({ error: error.message });
   res.json({
     id: snap.id,
     status: d.status,
@@ -133,6 +190,44 @@ app.get("/api/wizard/runs/:id", async (req, res) => {
     user_email: d.user_email,
     created_at: d.created_at?.toDate?.()?.toISOString?.() || null,
     updated_at: d.updated_at?.toDate?.()?.toISOString?.() || null,
+  });
+});
+
+// POST /api/wizard/runs/:id/events — フロントエンド (or 将来のバッチ) からの構造化ログ
+app.post("/api/wizard/runs/:id/events", async (req, res) => {
+  const { error } = await getRunWithAccess(req.params.id, req.user);
+  if (error) return res.status(error.status).json({ error: error.message });
+  const b = req.body || {};
+  await logEvent(req.params.id, {
+    actor: b.actor === "backend" ? "frontend" : "frontend", // frontend からの POST は actor 固定
+    level: b.level,
+    code: b.code,
+    message: b.message,
+    data: b.data,
+    user_email: req.user.email || "",
+  });
+  res.json({ ok: true });
+});
+
+// GET /api/wizard/runs/:id/events — フロントの「詳細ログ」パネル用
+app.get("/api/wizard/runs/:id/events", async (req, res) => {
+  const { error } = await getRunWithAccess(req.params.id, req.user);
+  if (error) return res.status(error.status).json({ error: error.message });
+  const q = await RUNS.doc(req.params.id).collection("events")
+    .orderBy("at", "asc").limit(300).get();
+  res.json({
+    events: q.docs.map(doc => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        actor: d.actor,
+        level: d.level,
+        code: d.code,
+        message: d.message,
+        data: d.data,
+        at: d.at?.toDate?.()?.toISOString?.() || null,
+      };
+    }),
   });
 });
 

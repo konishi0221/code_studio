@@ -79,6 +79,27 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
 .foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 30px; font-weight: 700; letter-spacing: 0.08em; }
 
+/* 詳細ログパネル: ブロックごとにどこで詰まったか確認するための診断 console */
+.diag-panel { background: var(--bg); border-radius: 18px; padding: 14px 18px; margin-top: 20px; box-shadow: 6px 6px 14px var(--sd), -4px -4px 10px var(--sl); font-size: 12px; }
+.diag-panel summary { cursor: pointer; font-weight: 700; color: var(--text2); list-style: none; user-select: none; display: flex; align-items: center; gap: 6px; }
+.diag-panel summary::-webkit-details-marker { display: none; }
+.diag-panel summary::before { content: "▶"; color: var(--text3); font-size: 9px; transition: transform 0.15s; }
+.diag-panel[open] summary::before { transform: rotate(90deg); }
+.diag-panel summary .count { margin-left: auto; font-size: 10px; color: var(--text3); font-weight: 700; }
+.diag-panel summary .level-warn { color: var(--warn); }
+.diag-panel summary .level-error { color: var(--err); font-weight: 800; }
+#diagPanel { max-height: 280px; overflow: auto; margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.4); border-radius: 10px; }
+#diagPanel:empty::before { content: "まだログなし"; color: var(--text3); font-style: italic; font-family: 'Outfit',sans-serif; font-size: 11px; }
+.diag-line { font-family: ui-monospace, Menlo, monospace; font-size: 10px; line-height: 1.55; padding: 2px 0; word-break: break-all; white-space: pre-wrap; }
+.diag-line.l-error { color: var(--err); font-weight: 700; }
+.diag-line.l-warn { color: var(--warn); }
+.diag-line.l-info { color: var(--text); }
+.diag-line.l-debug { color: var(--text3); }
+.diag-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.diag-actions button, .diag-actions a { padding: 7px 12px; border-radius: 16px; border: none; background: var(--bg); color: var(--text2); font-family: 'Outfit',sans-serif; font-size: 11px; font-weight: 700; cursor: pointer; box-shadow: 3px 3px 8px var(--sd), -2px -2px 6px var(--sl); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.diag-actions button:active, .diag-actions a:active { box-shadow: inset 2px 2px 6px var(--sd), inset -1px -1px 4px var(--sl); transform: scale(0.97); }
+.diag-actions .icon { font-family: 'Material Symbols Outlined'; font-size: 14px; font-variation-settings: 'FILL' 1, 'wght' 600; }
+
 .diag { font-size: 10px; color: var(--text3); font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.4); margin-top: 12px; line-height: 1.5; max-height: 160px; overflow: auto; cursor: pointer; }
 .diag:empty { display: none; }
 </style>
@@ -256,6 +277,23 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
     </button>
   </section>
 
+  <!-- 詳細ログ: 全ステップ通して動作を構造化記録。仕様変更で詰まったとき
+       「どのブロックで何が」を即見られるよう、常時 collapsed で配置。 -->
+  <details class="diag-panel" id="diagDetails">
+    <summary>
+      <span>詳細ログ</span>
+      <span id="diagSummaryHint" class="level-info"></span>
+      <span class="count"><span id="diagCount">0</span> 件</span>
+    </summary>
+    <div id="diagPanel"></div>
+    <div class="diag-actions">
+      <button onclick="copyDiagLog()"><span class="icon">content_copy</span>ログをコピー</button>
+      <a id="cloudLogsLink" href="#" target="_blank" rel="noopener"><span class="icon">open_in_new</span>Cloud Logs</a>
+      <a id="firestoreLink" href="#" target="_blank" rel="noopener" hidden><span class="icon">database</span>Firestore</a>
+      <button onclick="clearDiagLog()"><span class="icon">delete</span>クリア</button>
+    </div>
+  </details>
+
   <div class="foot">CLAUDE-STUDIO WIZARD · v0 (α)</div>
 </div>
 
@@ -284,22 +322,132 @@ function loadState() {
 }
 function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
+// ───────── 構造化ログ ─────────
+// 全イベント (auth, click, fetch, error, step transition) を local array に
+// 蓄積 + run_id があれば backend (wizard_runs/{id}/events) にも POST。
+// 仕様変更等で詰まったとき、画面下の「詳細ログ」展開でブロック単位の動作が見える。
+const wizardEvents = [];
+const MAX_LOCAL_EVENTS = 300;
+const PROJECT_ID = "code-studio-497311-app"; // Cloud Logs / Firestore へのリンク用
+
+function wizardLog(level, code, message, data) {
+  const e = {
+    at: new Date().toISOString(),
+    level: ["debug", "info", "warn", "error"].includes(level) ? level : "info",
+    code: String(code || "").slice(0, 80),
+    message: message == null ? "" : String(message).slice(0, 1000),
+    data: data ?? null,
+  };
+  wizardEvents.push(e);
+  if (wizardEvents.length > MAX_LOCAL_EVENTS) wizardEvents.shift();
+  renderDiagPanel();
+  // backend にも転送 (best-effort)
+  if (state.runId && fbAuth?.currentUser && (window.API_BASE_WIZARD || "")) {
+    fbAuth.currentUser.getIdToken().then(token => {
+      fetch(window.API_BASE_WIZARD + `/api/wizard/runs/${encodeURIComponent(state.runId)}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token },
+        body: JSON.stringify({ level: e.level, code: e.code, message: e.message, data: e.data }),
+      }).catch(() => {});
+    }).catch(() => {});
+  }
+}
+
+function renderDiagPanel() {
+  const el = document.getElementById("diagPanel");
+  const cnt = document.getElementById("diagCount");
+  const hint = document.getElementById("diagSummaryHint");
+  if (cnt) cnt.textContent = wizardEvents.length;
+  // summary に直近の warn/error を要約表示 (展開しなくても異常に気付ける)
+  if (hint) {
+    const recentBad = [...wizardEvents].reverse().find(e => e.level === "error" || e.level === "warn");
+    if (recentBad) {
+      hint.textContent = `最新の${recentBad.level === "error" ? "エラー" : "警告"}: ${recentBad.code}`;
+      hint.className = recentBad.level === "error" ? "level-error" : "level-warn";
+    } else {
+      hint.textContent = "";
+    }
+  }
+  if (el) {
+    el.innerHTML = wizardEvents.slice(-80).map(e => {
+      const t = e.at.slice(11, 19);
+      const dataStr = e.data
+        ? " " + (typeof e.data === "string" ? e.data : JSON.stringify(e.data)).slice(0, 200)
+        : "";
+      return `<div class="diag-line l-${e.level}">[${t}] ${e.level.toUpperCase().padEnd(5)} ${escapeHtml(e.code)}${e.message ? " — " + escapeHtml(e.message) : ""}${dataStr ? " " + escapeHtml(dataStr) : ""}</div>`;
+    }).join("");
+    el.scrollTop = el.scrollHeight;
+  }
+  updateExternalLinks();
+}
+
+function updateExternalLinks() {
+  const cl = document.getElementById("cloudLogsLink");
+  const fs = document.getElementById("firestoreLink");
+  if (cl) {
+    const q = state.runId
+      ? `resource.type="cloud_run_revision" resource.labels.service_name="wizard-api" jsonPayload.run_id="${state.runId}"`
+      : `resource.type="cloud_run_revision" resource.labels.service_name="wizard-api"`;
+    cl.href = `https://console.cloud.google.com/logs/query;query=${encodeURIComponent(q)}?project=${PROJECT_ID}`;
+  }
+  if (fs) {
+    if (state.runId) {
+      fs.hidden = false;
+      fs.href = `https://console.cloud.google.com/firestore/databases/-default-/data/panel/wizard_runs/${encodeURIComponent(state.runId)}?project=${PROJECT_ID}`;
+    } else {
+      fs.hidden = true;
+    }
+  }
+}
+
+window.copyDiagLog = () => {
+  const lines = wizardEvents.map(e => {
+    const dataStr = e.data ? " " + (typeof e.data === "string" ? e.data : JSON.stringify(e.data)) : "";
+    return `[${e.at}] ${e.level.toUpperCase()} ${e.code}${e.message ? " — " + e.message : ""}${dataStr}`;
+  }).join("\n");
+  const header = [
+    `# wizard log`,
+    `run_id: ${state.runId || "(none)"}`,
+    `user: ${state.googleEmail || "(not signed in)"}`,
+    `step: ${state.step}`,
+    `ua: ${navigator.userAgent}`,
+    `host: ${location.hostname}`,
+    `wizard_api: ${window.API_BASE_WIZARD || "(not set)"}`,
+    "",
+  ].join("\n");
+  const full = header + lines;
+  navigator.clipboard?.writeText(full).then(
+    () => { wizardLog("info", "log.copied", `${wizardEvents.length} 件`); alert(`ログ ${wizardEvents.length} 件をコピーしました`); },
+    () => alert("コピー失敗 (clipboard 権限)")
+  );
+};
+
+window.clearDiagLog = () => {
+  wizardEvents.length = 0;
+  renderDiagPanel();
+};
+
 // ───────── 画面遷移 ─────────
 window.next = () => {
   const i = STEPS.indexOf(state.step);
   if (i < STEPS.length - 1) {
-    state.step = STEPS[i + 1];
+    const prev = state.step, nxt = STEPS[i + 1];
+    state.step = nxt;
     saveState();
+    wizardLog("debug", "step.next", `${prev} → ${nxt}`);
     render();
   }
 };
 window.goBack = () => {
   const i = STEPS.indexOf(state.step);
   if (i > 0) {
-    state.step = STEPS[i - 1];
+    const prev = state.step, nxt = STEPS[i - 1];
+    state.step = nxt;
     saveState();
+    wizardLog("debug", "step.back", `${prev} → ${nxt}`);
     render();
   } else {
+    wizardLog("debug", "step.exit", "→ /");
     location.href = "/";
   }
 };
@@ -398,31 +546,41 @@ function showGoogleUser(email) {
 }
 
 window.signInGoogle = async () => {
-  if (signinInProgress || !fbAuth) return;
+  if (signinInProgress || !fbAuth) {
+    wizardLog("debug", "auth.click_signin_ignored", `inProgress=${signinInProgress} fbAuth=${!!fbAuth}`);
+    return;
+  }
   signinInProgress = true;
   const errEl = document.getElementById("googleErr");
   errEl.textContent = "";
   diagLog("click signin");
+  wizardLog("info", "auth.click_signin", "「Google で続行」クリック");
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
     const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
     if (isMobile) {
       diagLog("→ signInWithRedirect");
+      wizardLog("info", "auth.using_redirect", "mobile UA 検出、signInWithRedirect");
       await signInWithRedirect(fbAuth, provider);
+      // redirect の場合この行に到達しない (ページ遷移)
     } else {
       diagLog("→ signInWithPopup");
+      wizardLog("info", "auth.using_popup", "desktop UA、signInWithPopup");
       const res = await signInWithPopup(fbAuth, provider);
       onAuthed(res.user);
     }
   } catch (e) {
     diagLog(`ERR ${e.code || ""} ${e.message}`);
+    wizardLog("error", "auth.signin_failed", `${e.code || "?"} ${e.message}`,
+      { code: e.code, name: e.name });
     errEl.textContent = (e.code || "") + " " + e.message;
     signinInProgress = false;
   }
 };
 
 window.signOutGoogle = async () => {
+  wizardLog("info", "auth.signout", state.googleEmail || "");
   if (fbAuth) await signOut(fbAuth);
   state.googleEmail = "";
   saveState();
@@ -432,10 +590,12 @@ window.signOutGoogle = async () => {
 
 function onAuthed(user) {
   if (!user?.email) return;
+  const wasSigned = !!state.googleEmail;
   state.googleEmail = user.email;
   saveState();
   showGoogleUser(user.email);
   signinInProgress = false;
+  if (!wasSigned) wizardLog("info", "auth.signed_in", user.email);
 }
 
 // ───────── Questionnaire ─────────
@@ -446,6 +606,7 @@ document.querySelectorAll("[data-q] button").forEach(btn => {
     saveState();
     btn.closest("[data-q]").querySelectorAll("button").forEach(b => b.classList.toggle("sel", b === btn));
     updateQuizNext();
+    wizardLog("debug", "quiz.choice", `${q}=${btn.dataset.v}`);
   });
 });
 
@@ -470,18 +631,23 @@ window.submit = async () => {
   const btn = document.getElementById("submitBtn");
   errEl.textContent = "";
   if (!fbAuth?.currentUser) {
+    wizardLog("error", "submit.no_auth", "fbAuth.currentUser が null");
     errEl.textContent = "サインインが切れてます。Step 1 からやり直してください。";
     return;
   }
   const apiBase = window.API_BASE_WIZARD || "";
   if (!apiBase) {
+    wizardLog("error", "submit.no_api_base", "window.API_BASE_WIZARD 未注入。wizard-api がデプロイされてない (bootstrap.sh 未実行 or wizard-api-deploy トリガ未発火)。");
     errEl.textContent = "wizard-api URL が未注入。オーナーに bootstrap.sh / Cloud Build の状況確認を依頼してください。";
     return;
   }
   btn.disabled = true;
   btn.querySelector(".icon").textContent = "hourglass_top";
+  wizardLog("info", "submit.start", `goal=${state.quiz.goal} skill=${state.quiz.skill} team=${state.quiz.team}`,
+    { api: apiBase });
   try {
     const token = await fbAuth.currentUser.getIdToken();
+    wizardLog("debug", "submit.token_acquired");
     const res = await fetch(apiBase + "/api/wizard/submit", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: "Bearer " + token },
@@ -493,6 +659,7 @@ window.submit = async () => {
         github_username: state.ghUser || "",
       }),
     });
+    wizardLog("debug", "submit.response", `status=${res.status}`);
     if (!res.ok) {
       const t = await res.text();
       throw new Error(`HTTP ${res.status}: ${t.slice(0, 600)}`);
@@ -501,11 +668,13 @@ window.submit = async () => {
     state.runId = data.run_id;
     state.submittedAt = new Date().toISOString();
     saveState();
+    wizardLog("info", "submit.success", `run_id=${data.run_id} status=${data.status}`);
     state.step = "done";
     saveState();
     render();
     pollRun();
   } catch (e) {
+    wizardLog("error", "submit.failed", e.message, { stack: e.stack?.slice(0, 400) });
     errEl.textContent = "送信失敗: " + e.message;
     btn.disabled = false;
     btn.querySelector(".icon").textContent = "rocket_launch";
@@ -514,6 +683,7 @@ window.submit = async () => {
 
 // done ステップで run の状態を polling 表示。
 let pollTimer = null;
+let lastPollStatus = null;
 async function pollRun() {
   if (!state.runId || !fbAuth?.currentUser) return;
   const apiBase = window.API_BASE_WIZARD || "";
@@ -523,6 +693,7 @@ async function pollRun() {
   const subEl = document.getElementById("doneSub");
   const iconEl = document.getElementById("doneIcon");
   const noticeEl = document.getElementById("manualNotice");
+  wizardLog("debug", "poll.start", `run=${state.runId}`);
   async function tick() {
     try {
       const token = await fbAuth.currentUser.getIdToken();
@@ -531,13 +702,19 @@ async function pollRun() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
+      if (d.status !== lastPollStatus) {
+        wizardLog("info", "poll.status_change", `${lastPollStatus || "(initial)"} → ${d.status}`);
+        lastPollStatus = d.status;
+      }
       renderRunStatus(d, { statusEl, titleEl, subEl, iconEl, noticeEl });
       // 完了 / 手動待ちなら polling 終了
       if (d.status === "completed" || d.status === "failed" || d.status === "manual_required") {
         clearInterval(pollTimer);
         pollTimer = null;
+        wizardLog("debug", "poll.stop", `terminal=${d.status}`);
       }
     } catch (e) {
+      wizardLog("warn", "poll.error", e.message);
       statusEl.innerHTML = `<div class="err-msg">状態取得失敗: ${escapeHtml(e.message)}</div>`;
     }
   }
@@ -585,26 +762,44 @@ function renderRunStatus(d, els) {
   }
 }
 
+// 予期しないエラーも残す (例: 拡張機能との衝突, 外部 SDK の breaking 変更)
+window.addEventListener("error", (ev) => {
+  wizardLog("error", "uncaught", ev.message, { file: ev.filename, line: ev.lineno, col: ev.colno });
+});
+window.addEventListener("unhandledrejection", (ev) => {
+  wizardLog("error", "unhandled_promise", String(ev.reason?.message || ev.reason || ""));
+});
+
 // ───────── Init Firebase ─────────
 (async function init() {
+  wizardLog("info", "init.start", `host=${location.hostname} api=${window.API_BASE_WIZARD || "(none)"} ua=${navigator.userAgent.slice(0,80)}`);
   try {
     const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
     cfg.authDomain = location.hostname; // iOS Safari ITP 対策
     fbAuth = getAuth(initializeApp(cfg));
     await setPersistence(fbAuth, browserLocalPersistence);
     diagLog(`init project=${cfg.projectId}`);
+    wizardLog("info", "firebase.init", `project=${cfg.projectId} authDomain=${cfg.authDomain}`);
     try {
       const rr = await getRedirectResult(fbAuth);
       diagLog(`redirectResult=${rr ? rr.user.email : "null"}`);
-      if (rr?.user) onAuthed(rr.user);
+      if (rr?.user) {
+        wizardLog("info", "auth.redirect_return", rr.user.email);
+        onAuthed(rr.user);
+      } else {
+        wizardLog("debug", "auth.redirect_return", "null (通常起動)");
+      }
     } catch (e) {
       diagLog(`redirectResult ERR ${e.code || ""} ${e.message}`);
+      wizardLog("warn", "auth.redirect_err", `${e.code || "?"} ${e.message}`);
     }
     onAuthStateChanged(fbAuth, (user) => {
+      wizardLog("debug", "auth.state", user ? user.email : "signed-out");
       if (user) onAuthed(user);
     });
   } catch (e) {
     diagLog(`init ERR ${e.message}`);
+    wizardLog("error", "init.failed", e.message, { stack: e.stack?.slice(0, 400) });
     const errEl = document.getElementById("googleErr");
     if (errEl) errEl.textContent = "init失敗: " + e.message;
   }

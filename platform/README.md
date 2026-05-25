@@ -131,9 +131,18 @@ Cloud Build トリガは 2 本:
 | ディレクトリ | サービス | 役割 | 状態 |
 |---|---|---|---|
 | `apps/` (`/`) | — | LP | ✅ |
-| `apps/wizard/` (`/wizard/`) | `wizard-api` (Cloud Run) | Setup Wizard (Firestore で submit 保管) | α (UI + 受付 API 実装済、自動プロビジョン未実装) |
+| `apps/wizard/` (`/wizard/`) | `wizard-api` (Cloud Run) | Setup Wizard (Firestore で submit + 構造化ログ保管) | α (UI + 受付 API + 詳細ログパネル実装済、自動プロビジョン未実装) |
 | `apps/debug/` (`/debug/`) | — | 内部ランチャー | ✅ |
 | `apps/help/` (`/help/`) | `help-api` (Cloud Run) | AI ヘルプチャット (Gemini) | ✅ (デバッグ用、最終的に別リポへ) |
+
+### 🔍 障害切り分け用ログ
+
+Wizard は全イベント (auth, click, fetch, error, step transition) を構造化記録:
+- **フロント側**: `wizard_runs/{id}/events` に POST + local 蓄積 → 画面下「詳細ログ」パネルで常時閲覧
+- **バックエンド側**: 同じ events subcollection + `console.log(JSON)` で Cloud Logging へ
+- **詰まったとき**: パネルの「ログをコピー」ボタンで env / UA / run_id 付きでクリップボードにコピー → AI ヘルプに貼って原因切り分け
+- **オーナー用**: パネルから直接 Cloud Logs と Firestore のドキュメントへ飛べる
+- Google / GitHub の OAuth 仕様等が変わって動かなくなったとき、log code (`auth.signin_failed` / `submit.failed` / `poll.error` 等) で死んだブロックが即わかる
 
 ---
 

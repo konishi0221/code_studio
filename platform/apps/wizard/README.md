@@ -48,8 +48,22 @@ Step 3 のアンケートは単なるセットアップ情報ではなく、**�
   - `POST /api/wizard/submit` — submit を Firestore `wizard_runs/{id}` に保存、`run_id` を返す
   - `GET /api/wizard/runs/:id` — 本人 or オーナーが状態取得
   - `GET /api/wizard/runs` — 自分の最近の run 一覧
+  - `POST /api/wizard/runs/:id/events` — フロントから構造化ログを書き込む
+  - `GET /api/wizard/runs/:id/events` — events 一覧 (詳細ログパネル用)
 - 将来 Cloud Tasks chain で各 step を進める (現状は status=`manual_required` で止まる)
 - Firestore SA は `wizard-run`、`roles/datastore.user` を `EXTRA_ROLES` で付与
+
+### 構造化ログ (どのブロックで詰まったか即わかるよう全イベント記録)
+
+- フロント / バックエンド両方が `wizard_runs/{id}/events` サブコレクションに書く
+- 各 event: `{ at, actor, level (debug/info/warn/error), code, message, data }`
+- フロントは追加で local array にもため、画面下の **「詳細ログ」パネル**で常時参照可
+- パネルから:
+  - **ログをコピー** — 共有 / 貼り付け用 (env / UA / run_id ヘッダ付き、トラブル相談で AI ヘルプに丸ごと貼れる)
+  - **Cloud Logs** — backend (Cloud Run) の構造化ログを `jsonPayload.run_id="..."` で絞り込んだ Logs Explorer を開く
+  - **Firestore** — その run のドキュメントを直接開く (オーナー用)
+- バックエンドは `console.log(JSON.stringify({severity, run_id, code, ...}))` 形式で出力 → Cloud Logging 側で自動構造化される
+- Google/GitHub 等の外部 API が仕様変更で動かなくなったとき、`code` (例: `auth.signin_failed`, `submit.failed`, `poll.error`) でどのブロックの何が死んだか一発切り分け
 
 ## バックエンドでやる予定の処理 (Cloud Tasks chain 単位)
 
@@ -105,9 +119,10 @@ bootstrap.sh は既存リソースに対しては冪等。新規追加分 (Fires
 
 ## 残課題
 
-- [x] バックエンド Cloud Run worker 実装 (`apps/wizard/server/`) ← この PR
-- [x] Firestore で submit 永続化 ← この PR
-- [x] フロントエンドが実 API を叩いて状態 polling ← この PR
+- [x] バックエンド Cloud Run worker 実装 (`apps/wizard/server/`)
+- [x] Firestore で submit 永続化
+- [x] フロントエンドが実 API を叩いて状態 polling
+- [x] 構造化ログ + 詳細ログパネル + Cloud Logs/Firestore 直リンク
 - [ ] GitHub OAuth 正式連携 (今はユーザー名手入力)
 - [ ] Google OAuth `cloud-platform` スコープ取得 (Google App 検証通す)
 - [ ] Cloud Tasks chain で各ステップを非同期実行 (途中失敗からの再開)
