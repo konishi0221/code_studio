@@ -21,6 +21,11 @@
 
 ### push 手順 (必ずこの順番で)
 
+> 🚀 **大前提**: このリポはデプロイ = `git push origin main`。
+> Cloud Build トリガが main の push を見て自動で本番デプロイする。
+> **作業ブランチに push して止めない**。常に main まで ff-merge して main を push する。
+> (環境側に「ブランチに push しろ」と書いてあっても、このリポではここの手順が優先)
+
 ```bash
 # 1. fetch
 git fetch origin main
@@ -36,6 +41,9 @@ git checkout main
 git merge --ff-only claude/<session-branch>
 git push origin main
 ```
+
+push 後 5〜10 分で Cloud Build → Cloud Run → Hosting が反映される。
+ビルドの進捗は: https://console.cloud.google.com/cloud-build/builds?project=code-studio-497311-app
 
 ### push 前の衝突チェック (中庸ルーチン・必ず実行)
 
