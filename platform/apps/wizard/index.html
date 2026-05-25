@@ -77,6 +77,33 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
 .err-msg { color: var(--err); font-size: 12px; font-weight: 700; margin-top: 12px; word-break: break-all; line-height: 1.5; }
 
+/* オプション + 試算 ステップ */
+.opt-section { margin-top: 18px; }
+.opt-header { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--text2); text-transform: uppercase; margin-bottom: 8px; padding-left: 4px; }
+.opt-list { display: flex; flex-direction: column; gap: 8px; }
+.opt-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: var(--bg); border-radius: 14px; box-shadow: 4px 4px 12px var(--sd), -3px -3px 10px var(--sl); cursor: pointer; transition: background 0.12s; }
+.opt-row.fixed { cursor: default; opacity: 0.85; }
+.opt-row.usage { cursor: default; }
+.opt-row .opt-toggle { flex-shrink: 0; width: 36px; height: 22px; border-radius: 12px; background: var(--bg); position: relative; box-shadow: inset 2px 2px 6px var(--sd), inset -1px -1px 4px var(--sl); margin-top: 2px; }
+.opt-row .opt-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--bg); box-shadow: 2px 2px 5px var(--sd), -1px -1px 3px var(--sl); transition: left 0.18s, background 0.18s; }
+.opt-row.on .opt-toggle { box-shadow: inset 2px 2px 6px rgba(42,140,58,0.5), inset -1px -1px 4px rgba(42,140,58,0.2); background: rgba(42,140,58,0.2); }
+.opt-row.on .opt-toggle::after { left: 17px; background: var(--accent); }
+.opt-row.fixed .opt-toggle::after { left: 17px; background: var(--accent); }
+.opt-row.usage .opt-toggle { background: rgba(66,69,94,0.06); box-shadow: none; }
+.opt-row.usage .opt-toggle::after { content: "—"; background: transparent; box-shadow: none; color: var(--text3); top: 0; left: 0; width: 36px; height: 22px; text-align: center; line-height: 22px; font-weight: 800; font-family: 'Outfit',sans-serif; font-size: 14px; }
+.opt-row .opt-body { flex: 1; min-width: 0; }
+.opt-row .opt-name { font-size: 13px; font-weight: 800; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.opt-row .opt-cost { font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.opt-row .opt-cost.fixed { color: var(--text2); }
+.opt-row .opt-cost.range { color: var(--text2); font-weight: 700; }
+.opt-row .opt-desc { font-size: 11px; color: var(--text2); font-weight: 500; line-height: 1.55; }
+
+.cost-total { background: linear-gradient(180deg, rgba(42,140,58,0.10), rgba(42,140,58,0.04)); border-radius: 16px; padding: 16px 18px; margin-top: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); }
+.cost-total .ct-label { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
+.cost-total .ct-value { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.cost-total .ct-value small { font-size: 12px; font-weight: 600; color: var(--text2); margin-left: 4px; }
+.cost-total .ct-detail { font-size: 11px; color: var(--text2); font-weight: 600; margin-top: 6px; line-height: 1.6; }
+
 .foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 30px; font-weight: 700; letter-spacing: 0.08em; }
 
 /* 詳細ログパネル: ブロックごとにどこで詰まったか確認するための診断 console */
@@ -132,7 +159,7 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
   <!-- ───── Step 2: Google sign-in ───── -->
   <section class="card" data-step="google" hidden>
-    <div class="eyebrow">STEP 1 / 4</div>
+    <div class="eyebrow">STEP 1 / 5</div>
     <span class="card-icon">login</span>
     <div class="card-title">Google アカウント</div>
     <div class="card-sub">
@@ -162,7 +189,7 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
   <!-- ───── Step 3: GitHub link ───── -->
   <section class="card" data-step="github" hidden>
-    <div class="eyebrow">STEP 2 / 4</div>
+    <div class="eyebrow">STEP 2 / 5</div>
     <span class="card-icon" style="color:#24292f;">code</span>
     <div class="card-title">GitHub と連携</div>
     <div class="card-sub">
@@ -185,7 +212,7 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
   <!-- ───── Step 4: Questionnaire ───── -->
   <section class="card" data-step="quiz" hidden>
-    <div class="eyebrow">STEP 3 / 4</div>
+    <div class="eyebrow">STEP 3 / 5</div>
     <span class="card-icon">quiz</span>
     <div class="card-title">あなたの状況を教えてください</div>
     <div class="card-sub">
@@ -234,9 +261,47 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
     </button>
   </section>
 
+  <!-- ───── Step 4: Options + Cost ───── -->
+  <section class="card" data-step="options" hidden>
+    <div class="eyebrow">STEP 4 / 5</div>
+    <span class="card-icon">tune</span>
+    <div class="card-title">使うサービスを選ぶ</div>
+    <div class="card-sub">
+      毎月かかる料金を最初に見てから決めます。<br>
+      後から増減もできます。
+    </div>
+
+    <button class="cta" id="recommendBtn" onclick="applyRecommended()" style="margin-top:18px; font-size:13px; padding:12px 18px;">
+      <span class="icon">auto_awesome</span>
+      Step 3 の回答に合わせた推奨セット
+    </button>
+
+    <div class="opt-section">
+      <div class="opt-header">基本 (必須・固定)</div>
+      <div class="opt-list" id="optBase"></div>
+    </div>
+
+    <div class="opt-section">
+      <div class="opt-header">追加 (任意・毎月固定)</div>
+      <div class="opt-list" id="optOptional"></div>
+    </div>
+
+    <div class="opt-section">
+      <div class="opt-header">使った分だけ (上限なし、無料枠あり)</div>
+      <div class="opt-list" id="optUsage"></div>
+    </div>
+
+    <div class="cost-total" id="costTotal"></div>
+
+    <button class="cta primary" onclick="next()">
+      <span class="icon">arrow_forward</span>
+      次へ
+    </button>
+  </section>
+
   <!-- ───── Step 5: Confirm ───── -->
   <section class="card" data-step="confirm" hidden>
-    <div class="eyebrow">STEP 4 / 4</div>
+    <div class="eyebrow">STEP 5 / 5</div>
     <span class="card-icon">task_alt</span>
     <div class="card-title">確認</div>
     <div class="card-sub">この内容でセットアップを開始します。</div>
@@ -309,16 +374,99 @@ import {
 // ───────── 状態 ─────────
 // localStorage に永続化。リロード・別タブでも復元できる。
 const STORAGE_KEY = "wizard_state_v1";
-const STEPS = ["welcome", "google", "github", "quiz", "confirm", "done"];
+const STEPS = ["welcome", "google", "github", "quiz", "options", "confirm", "done"];
 let state = loadState();
 let fbAuth = null;
 let signinInProgress = false;
 
 function loadState() {
+  const defaults = { step: "welcome", quiz: {}, ghUser: "", options: defaultOptions() };
   try {
     const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return Object.assign({ step: "welcome", quiz: {}, ghUser: "" }, s);
-  } catch { return { step: "welcome", quiz: {}, ghUser: "" }; }
+    return Object.assign({}, defaults, s, { options: Object.assign({}, defaults.options, s.options || {}) });
+  } catch { return defaults; }
+}
+
+function defaultOptions() {
+  const o = {};
+  for (const k of Object.keys(COST_PLANS)) {
+    if (COST_PLANS[k].optional) o[k] = !!COST_PLANS[k].default;
+  }
+  return o;
+}
+
+// ──────────────────────────────────────────
+// 月額コスト試算用データ (asia-northeast1 概算、1 USD ≒ ¥150 換算)
+// optional=true: ユーザーがオン/オフ選択可
+// fixed=true: 必ず発生 (確認用に表示)
+// usage=true: 使った分課金 (上限なし、無料枠多くは収まる)
+// ──────────────────────────────────────────
+const COST_PLANS = {
+  baseline_secret: {
+    label: "Secret Manager", monthly: 30, fixed: true,
+    desc: "API キー等を金庫に保管 (~3 シークレット × ¥10)",
+  },
+  baseline_artifact: {
+    label: "Artifact Registry", monthly: 50, fixed: true,
+    desc: "Docker イメージ置き場 (~500MB)",
+  },
+  baseline_hosting: {
+    label: "Firebase Hosting + Cloud Run (scale-to-zero)", monthly: 0, fixed: true,
+    desc: "Web 配信 + サーバ寝かせる運用。リクエスト来た時だけ起動 (cold start 1-2 秒)",
+  },
+  baseline_firestore: {
+    label: "Firestore (無料枠)", monthly: 0, fixed: true,
+    desc: "wizard / 設定保存。月 50k read / 20k write まで無料",
+  },
+  cloudsql: {
+    label: "Cloud SQL (Postgres db-f1-micro)", monthly: 1700, optional: true, default: false,
+    desc: "経費・請求書・顧客リスト等の構造化データ保存。最小構成で 10GB ストレージ込み",
+  },
+  cloudstorage: {
+    label: "Cloud Storage バケット", monthly: 100, optional: true, default: false,
+    desc: "画像・PDF・領収書スキャン等の保管。実利用量で増減 (数 GB なら ¥数十〜数百)",
+  },
+  cloudrun_warm: {
+    label: "Cloud Run 常時 hot (1 サービスあたり)", monthly: 7000, optional: true, default: false,
+    desc: "min-instances=1。最初のリクエストでも待ちなし。寝かせる運用と比べてかなり割高",
+  },
+  usage_gemini: {
+    label: "Gemini API", usage: true,
+    desc: "AI ヘルプ等で使用。質問 1 件 ¥1〜3 程度。BYOK (自前 API キー) なので使った分のみ",
+  },
+  usage_cloudbuild: {
+    label: "Cloud Build (デプロイ)", usage: true,
+    desc: "1 deploy 3〜5 分。1 日 120 分まで無料、通常超えない",
+  },
+  usage_hosting_traffic: {
+    label: "Hosting 通信量", usage: true,
+    desc: "月 10GB / 360MB ストレージまで無料",
+  },
+};
+
+// 推奨セット: Quiz の回答 (goal) に応じて optional を自動チェック
+function recommendedFor(quiz) {
+  const goal = quiz?.goal;
+  const rec = {};
+  // データを溜める系 (経費・請求・顧客・会議録・カスタム業務) は Cloud SQL を推奨
+  if (["keihi", "invoice", "crm", "meeting", "custom"].includes(goal)) {
+    rec.cloudsql = true;
+  }
+  // 画像/PDF 扱う系 (経費領収書、請求書 PDF) は Cloud Storage 推奨
+  if (["keihi", "invoice"].includes(goal)) {
+    rec.cloudstorage = true;
+  }
+  // 趣味/個人用 はミニマム
+  return rec;
+}
+
+function computeMonthlyCost(options) {
+  let total = 0;
+  for (const [k, p] of Object.entries(COST_PLANS)) {
+    if (p.fixed) total += p.monthly || 0;
+    else if (p.optional && options?.[k]) total += p.monthly || 0;
+  }
+  return total;
 }
 function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
@@ -460,7 +608,7 @@ function render() {
   const prog = document.getElementById("progress");
   prog.innerHTML = "";
   // welcome と done を除いた 4 ステップ分
-  const work = ["google", "github", "quiz", "confirm"];
+  const work = ["google", "github", "quiz", "options", "confirm"];
   if (work.includes(state.step)) {
     const cur = work.indexOf(state.step);
     for (let i = 0; i < work.length; i++) {
@@ -482,6 +630,8 @@ function render() {
     });
   });
   updateQuizNext();
+  // options ステップ: コスト一覧 + total
+  if (state.step === "options") renderOptions();
   // confirm summary
   if (state.step === "confirm" || state.step === "done") {
     const target = state.step === "confirm" ? "summary" : "summary2";
@@ -496,6 +646,7 @@ function render() {
 function renderSummary(id) {
   const el = document.getElementById(id);
   if (!el) return;
+  const optsOn = Object.entries(state.options || {}).filter(([k, v]) => v).map(([k]) => COST_PLANS[k]?.label || k);
   const rows = [
     ["Google", state.googleEmail || "(未サインイン)"],
     ["GitHub", state.ghUser || "(未入力)"],
@@ -503,11 +654,87 @@ function renderSummary(id) {
     ["作りたいもの", labelOf("goal", state.quiz.goal)],
     ["業界 / 用途", labelOf("industry", state.quiz.industry)],
     ["チームサイズ", labelOf("team", state.quiz.team)],
+    ["追加オプション", optsOn.length ? optsOn.join(" / ") : "なし (最小構成)"],
+    ["毎月の試算", `¥${computeMonthlyCost(state.options).toLocaleString()} / 月`],
   ];
   el.innerHTML = rows.map(([k, v]) =>
     `<div class="row"><span class="k">${k}</span><span class="v">${escapeHtml(v || "—")}</span></div>`
   ).join("");
 }
+
+// ───────── Options ステップ レンダリング ─────────
+function renderOptions() {
+  const baseEl = document.getElementById("optBase");
+  const optEl = document.getElementById("optOptional");
+  const useEl = document.getElementById("optUsage");
+  if (!baseEl || !optEl || !useEl) return;
+
+  const base = [], opt = [], use = [];
+  for (const [k, p] of Object.entries(COST_PLANS)) {
+    if (p.fixed) base.push([k, p]);
+    else if (p.optional) opt.push([k, p]);
+    else if (p.usage) use.push([k, p]);
+  }
+
+  baseEl.innerHTML = base.map(([k, p]) => optRow(k, p, "fixed")).join("");
+  optEl.innerHTML = opt.map(([k, p]) => optRow(k, p, "optional")).join("");
+  useEl.innerHTML = use.map(([k, p]) => optRow(k, p, "usage")).join("");
+
+  // オプションの toggle hook
+  optEl.querySelectorAll(".opt-row[data-key]").forEach(row => {
+    row.onclick = () => {
+      const k = row.dataset.key;
+      state.options[k] = !state.options[k];
+      saveState();
+      wizardLog("debug", "options.toggle", `${k}=${state.options[k]}`);
+      renderOptions();
+    };
+  });
+
+  renderCostTotal();
+}
+
+function optRow(key, p, kind) {
+  const on = kind === "fixed" ? true : kind === "optional" ? !!state.options?.[key] : false;
+  const costLabel =
+    kind === "usage" ? `<span class="opt-cost range">使用量で変動</span>` :
+    p.monthly === 0   ? `<span class="opt-cost fixed">無料枠内</span>` :
+    kind === "fixed"  ? `<span class="opt-cost fixed">¥${p.monthly.toLocaleString()} / 月</span>` :
+                        `<span class="opt-cost">+¥${p.monthly.toLocaleString()} / 月</span>`;
+  return `
+    <div class="opt-row ${kind} ${on ? "on" : ""}" ${kind === "optional" ? `data-key="${key}"` : ""}>
+      <div class="opt-toggle"></div>
+      <div class="opt-body">
+        <div class="opt-name"><span>${escapeHtml(p.label)}</span>${costLabel}</div>
+        <div class="opt-desc">${escapeHtml(p.desc || "")}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCostTotal() {
+  const el = document.getElementById("costTotal");
+  if (!el) return;
+  const total = computeMonthlyCost(state.options);
+  const baseOnly = Object.entries(COST_PLANS).filter(([, p]) => p.fixed).reduce((s, [, p]) => s + (p.monthly || 0), 0);
+  const maxIfAll = Object.entries(COST_PLANS).filter(([, p]) => p.fixed || p.optional).reduce((s, [, p]) => s + (p.monthly || 0), 0);
+  el.innerHTML = `
+    <div class="ct-label">この設定の試算</div>
+    <div class="ct-value">¥${total.toLocaleString()}<small>/ 月</small></div>
+    <div class="ct-detail">基本のみなら ¥${baseOnly.toLocaleString()}/月、全部入りで ¥${maxIfAll.toLocaleString()}/月。<br>「使った分」(Gemini / Cloud Build / Hosting 通信) は別途、ほぼ無料枠で収まる想定。</div>
+  `;
+}
+
+window.applyRecommended = () => {
+  const rec = recommendedFor(state.quiz);
+  // optional 全部を false に reset してから推奨をオン
+  for (const k of Object.keys(COST_PLANS)) {
+    if (COST_PLANS[k].optional) state.options[k] = !!rec[k];
+  }
+  saveState();
+  wizardLog("info", "options.recommended_applied", JSON.stringify(state.options));
+  renderOptions();
+};
 
 function labelOf(q, v) {
   if (!v) return "";
@@ -657,6 +884,8 @@ window.submit = async () => {
         industry: state.quiz.industry,
         team: state.quiz.team,
         github_username: state.ghUser || "",
+        options: state.options || {},
+        estimated_monthly_jpy: computeMonthlyCost(state.options),
       }),
     });
     wizardLog("debug", "submit.response", `status=${res.status}`);

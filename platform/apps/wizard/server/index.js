@@ -70,6 +70,11 @@ const ALLOWED = {
   team: ["solo", "2-5", "6-20", "21+"],
 };
 
+// 課金が発生する optional サービス。これらの bool が将来の自動プロビジョン
+// (bootstrap.sh / Cloud Tasks chain) で HAS_DB / HAS_BUCKET / min-instances 等
+// に反映される。新規追加時はフロントの COST_PLANS も合わせて更新。
+const OPTION_KEYS = ["cloudsql", "cloudstorage", "cloudrun_warm"];
+
 function pick(obj, key, allowed) {
   const v = String(obj?.[key] || "").trim();
   return allowed.includes(v) ? v : null;
@@ -138,11 +143,20 @@ app.post("/api/wizard/submit", async (req, res) => {
   }
   const ghUser = String(b.github_username || "").trim().slice(0, 80);
 
+  // optional 課金サービスの選択 (whitelist フィルタ)
+  const options = {};
+  for (const k of OPTION_KEYS) options[k] = !!(b.options && b.options[k]);
+  const estimatedMonthlyJpy = Number.isFinite(b.estimated_monthly_jpy)
+    ? Math.max(0, Math.min(1_000_000, Math.round(b.estimated_monthly_jpy)))
+    : null;
+
   const now = admin.firestore.Timestamp.now();
   const doc = {
     user_uid: req.user.uid,
     user_email: req.user.email || "",
     survey,
+    options,
+    estimated_monthly_jpy: estimatedMonthlyJpy,
     github_username: ghUser,
     // 現状ステータス: 自動プロビジョン未実装なので manual_required で止まる。
     // 将来のステップ追加例:
@@ -160,10 +174,12 @@ app.post("/api/wizard/submit", async (req, res) => {
 
   try {
     const ref = await RUNS.add(doc);
+    const optsOn = Object.entries(options).filter(([, v]) => v).map(([k]) => k);
     await logEvent(ref.id, {
       actor: "backend", level: "info", code: "submit.received",
-      message: `goal=${survey.goal} skill=${survey.skill} team=${survey.team} gh=${ghUser || "-"}`,
+      message: `goal=${survey.goal} skill=${survey.skill} team=${survey.team} gh=${ghUser || "-"} options=[${optsOn.join(",") || "none"}] cost=¥${estimatedMonthlyJpy ?? "?"}/月`,
       user_email: req.user.email,
+      data: { options, estimated_monthly_jpy: estimatedMonthlyJpy },
     });
     await logEvent(ref.id, {
       actor: "backend", level: "warn", code: "status.manual_required",
@@ -186,6 +202,8 @@ app.get("/api/wizard/runs/:id", async (req, res) => {
     status: d.status,
     steps: d.steps,
     survey: d.survey,
+    options: d.options || {},
+    estimated_monthly_jpy: d.estimated_monthly_jpy ?? null,
     github_username: d.github_username,
     user_email: d.user_email,
     created_at: d.created_at?.toDate?.()?.toISOString?.() || null,

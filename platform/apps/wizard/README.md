@@ -14,7 +14,8 @@
 1. **Google ログイン** (Firebase Auth)
 2. **GitHub 連携** (現状はユーザー名手入力、後で正式 OAuth に置換)
 3. **4 つの設問にクリック回答** (スキル / 作りたいもの / 業界 / チームサイズ)
-4. **確認 → 開始ボタン**
+4. **オプション選択 + 月額試算** (Cloud SQL / Storage / Cloud Run 常時 hot 等の有料サービスを toggle で選択、選択に応じて月額が live で更新)
+5. **確認 → 開始ボタン**
 
 これ以外は全部 wizard が裏でやる予定:
 - GCP プロジェクト作成 / 請求紐付け
@@ -24,6 +25,24 @@
 - Cloud Build トリガ作成 + 初回デプロイ
 - Firebase Auth プロバイダ有効化 + 認可ドメイン追加
 - OAuth redirect URI 追加 (現状唯一の手動 GCP コンソール作業)
+
+## オプション + 月額試算 (Step 4)
+
+「いきなり Cloud SQL 立ててお金かかる」が起きないよう、有料サービスは toggle 式で選択。選択に応じて月額が live 計算される。
+
+| サービス | 月額目安 (asia-northeast1) | 必要なケース |
+|---|---|---|
+| Secret Manager / Artifact Registry / Hosting / Cloud Run (scale-to-zero) | ~¥80 (固定) | 常に必要 |
+| Cloud SQL (Postgres db-f1-micro) | +¥1,700 | 経費・請求書・顧客リスト等の構造化データ保存 |
+| Cloud Storage バケット | +¥0〜500 | 画像・PDF・領収書スキャン保管 |
+| Cloud Run 常時 hot (min-instances=1) | +¥7,000 / サービス | コールドスタート無しにしたい場合 (個人用途では基本不要) |
+| Gemini / Cloud Build / Hosting 通信 | 使った分 | 無料枠が広く、通常は無料内 |
+
+価格データはフロント側 `COST_PLANS` に集約。新規サービス追加時はここ + バックエンドの `OPTION_KEYS` を更新。
+
+「**Step 3 の回答に合わせた推奨セット**」ボタンで、`goal` から自動 toggle (例: 経費なら Cloud SQL + Storage を on)。ユーザーは上書きできる。
+
+選択は submit と一緒に Firestore に保存 (`wizard_runs/{id}.options`)。将来の自動プロビジョン (Cloud Tasks chain) がこの flag を読んで `bootstrap.sh` の `HAS_DB` / `HAS_BUCKET` や Cloud Run の `min-instances` に反映する。
 
 ## 設問が重要な理由
 
