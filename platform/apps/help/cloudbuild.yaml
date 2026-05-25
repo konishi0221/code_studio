@@ -133,6 +133,16 @@ steps:
       - -c
       - |
         set -e
+        # firebase.json stays generic in git (no "site" field), so the same
+        # template can target any user's Hosting site id. Inject the actual
+        # site id at build time before firebase deploy runs.
+        node -e "
+          const fs = require('fs');
+          const cfg = JSON.parse(fs.readFileSync('platform/firebase.json'));
+          cfg.hosting.site = '${_HOSTING_SITE}';
+          fs.writeFileSync('platform/firebase.json', JSON.stringify(cfg, null, 2));
+          console.log('  injected site: ' + cfg.hosting.site);
+        "
         npm install -g firebase-tools@13 --silent --no-audit --no-fund
         firebase deploy --only hosting \
           --project=$PROJECT_ID \
