@@ -193,21 +193,52 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
     <span class="card-icon" style="color:#24292f;">code</span>
     <div class="card-title">GitHub と連携</div>
     <div class="card-sub">
-      テンプレリポジトリをあなたの GitHub に fork して、Cloud Build と接続します。
+      テンプレリポジトリをあなたの GitHub に fork するために連携します。
     </div>
-    <div class="notice">
-      <span class="icon">construction</span>
-      <div>
-        <b>GitHub OAuth 実装中</b>。今は GitHub ユーザー名だけ手入力で先に進めます (後で正式連携に置き換わります)。
+
+    <!-- 連携済み表示 -->
+    <div id="ghConnected" hidden>
+      <div class="user-row">
+        <span class="icon">check_circle</span>
+        <span class="email" id="ghLogin"></span>
+        <button class="signout" onclick="disconnectGithub()">解除</button>
       </div>
+      <button class="cta primary" onclick="next()">
+        <span class="icon">arrow_forward</span>
+        次へ
+      </button>
     </div>
-    <label class="field-label">GitHub ユーザー名 (任意)</label>
-    <input id="ghUser" placeholder="例: konishi0221" style="width:100%; margin-top:6px; padding:14px 16px; border-radius:14px; border:none; background:var(--bg); box-shadow: inset 3px 3px 8px var(--sd), inset -2px -2px 6px var(--sl); font-family:'Outfit',sans-serif; font-size:14px; color:var(--text);" />
-    <div class="field-hint">後で連携できれば空欄で OK</div>
-    <button class="cta primary" onclick="next()">
-      <span class="icon">arrow_forward</span>
-      次へ
-    </button>
+
+    <!-- 未連携 (OAuth 利用可) -->
+    <div id="ghStartOAuth" hidden>
+      <button class="cta primary" id="ghOauthBtn" onclick="connectGithub()" style="background:#24292f; color:white; box-shadow: 6px 6px 18px rgba(36,41,47,0.45), -4px -4px 12px var(--sl);">
+        <span class="icon">code</span>
+        GitHub で続行
+      </button>
+      <div class="field-hint" style="text-align:center; margin-top:8px;">テンプレ fork のため <code>read:user / public_repo</code> 権限をリクエストします</div>
+      <div class="err-msg" id="ghErr"></div>
+    </div>
+
+    <!-- 未連携 (OAuth 未設定 fallback) -->
+    <div id="ghFallback" hidden>
+      <div class="notice">
+        <span class="icon">construction</span>
+        <div>
+          <b>GitHub OAuth 未設定</b><br>
+          オーナーが GitHub OAuth App を登録するまでは、ユーザー名を手入力で進められます。
+        </div>
+      </div>
+      <label class="field-label">GitHub ユーザー名 (任意)</label>
+      <input id="ghUser" placeholder="例: konishi0221" style="width:100%; margin-top:6px; padding:14px 16px; border-radius:14px; border:none; background:var(--bg); box-shadow: inset 3px 3px 8px var(--sd), inset -2px -2px 6px var(--sl); font-family:'Outfit',sans-serif; font-size:14px; color:var(--text);" />
+      <div class="field-hint">後で連携できれば空欄で OK</div>
+      <button class="cta primary" onclick="next()">
+        <span class="icon">arrow_forward</span>
+        次へ
+      </button>
+    </div>
+
+    <!-- 利用可否ロード中 -->
+    <div id="ghLoading" class="field-hint" style="text-align:center; padding:20px 0;">準備中…</div>
   </section>
 
   <!-- ───── Step 4: Questionnaire ───── -->
@@ -630,6 +661,8 @@ function render() {
     });
   });
   updateQuizNext();
+  // github ステップ: OAuth 利用可否 + 連携状態に応じて UI 切り替え
+  if (state.step === "github") renderGithubStep();
   // options ステップ: コスト一覧 + total
   if (state.step === "options") renderOptions();
   // confirm summary
@@ -735,6 +768,158 @@ window.applyRecommended = () => {
   wizardLog("info", "options.recommended_applied", JSON.stringify(state.options));
   renderOptions();
 };
+
+// ───────── GitHub OAuth (Step 2 連携) ─────────
+let wizardConfig = null;       // { github_oauth_available, hosting_base }
+let ghConnectionState = null;  // null = 未取得 / { connected: bool, login? }
+
+async function loadWizardConfig() {
+  const apiBase = window.API_BASE_WIZARD || "";
+  if (!apiBase) { wizardConfig = { github_oauth_available: false }; return; }
+  try {
+    const res = await fetch(apiBase + "/api/wizard/config");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    wizardConfig = await res.json();
+    wizardLog("info", "config.loaded", `github_oauth=${wizardConfig.github_oauth_available}`);
+  } catch (e) {
+    wizardLog("warn", "config.load_failed", e.message);
+    wizardConfig = { github_oauth_available: false };
+  }
+}
+
+async function loadGithubStatus() {
+  if (!fbAuth?.currentUser) { ghConnectionState = { connected: false }; return; }
+  const apiBase = window.API_BASE_WIZARD || "";
+  if (!apiBase) { ghConnectionState = { connected: false }; return; }
+  try {
+    const token = await fbAuth.currentUser.getIdToken();
+    const res = await fetch(apiBase + "/api/github/me", {
+      headers: { authorization: "Bearer " + token },
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    ghConnectionState = await res.json();
+    if (ghConnectionState.connected) {
+      state.ghUser = ghConnectionState.login;
+      state.ghOauth = true;
+      saveState();
+      wizardLog("info", "github.status.connected", ghConnectionState.login);
+    } else {
+      wizardLog("debug", "github.status.not_connected");
+    }
+  } catch (e) {
+    wizardLog("warn", "github.status_failed", e.message);
+    ghConnectionState = { connected: false };
+  }
+}
+
+function renderGithubStep() {
+  const connected = document.getElementById("ghConnected");
+  const startOAuth = document.getElementById("ghStartOAuth");
+  const fallback = document.getElementById("ghFallback");
+  const loading = document.getElementById("ghLoading");
+  if (!connected || !startOAuth || !fallback || !loading) return;
+  connected.hidden = true; startOAuth.hidden = true; fallback.hidden = true; loading.hidden = true;
+  if (!wizardConfig || ghConnectionState === null) { loading.hidden = false; return; }
+  if (ghConnectionState.connected) {
+    document.getElementById("ghLogin").textContent = ghConnectionState.login;
+    connected.hidden = false;
+  } else if (wizardConfig.github_oauth_available) {
+    startOAuth.hidden = false;
+  } else {
+    fallback.hidden = false;
+    const ghInput = document.getElementById("ghUser");
+    if (ghInput && state.ghUser) ghInput.value = state.ghUser;
+  }
+}
+
+window.connectGithub = async () => {
+  const errEl = document.getElementById("ghErr");
+  const btn = document.getElementById("ghOauthBtn");
+  if (!fbAuth?.currentUser) {
+    errEl.textContent = "サインインが切れてます。Step 1 からやり直してください。";
+    wizardLog("error", "github.click_no_auth");
+    return;
+  }
+  if (!(window.API_BASE_WIZARD || "")) {
+    errEl.textContent = "wizard-api URL 未注入。bootstrap.sh / Cloud Build の状況確認をオーナーに依頼してください。";
+    wizardLog("error", "github.click_no_api");
+    return;
+  }
+  btn.disabled = true;
+  errEl.textContent = "";
+  wizardLog("info", "github.click_connect", "OAuth flow 開始");
+  try {
+    const token = await fbAuth.currentUser.getIdToken();
+    const res = await fetch(window.API_BASE_WIZARD + "/api/github/start", {
+      method: "POST",
+      headers: { authorization: "Bearer " + token },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t.slice(0, 300)}`);
+    }
+    const { auth_url } = await res.json();
+    wizardLog("info", "github.redirect_to_github", auth_url.slice(0, 80));
+    location.href = auth_url;
+  } catch (e) {
+    wizardLog("error", "github.start_failed", e.message);
+    errEl.textContent = "連携開始失敗: " + e.message;
+    btn.disabled = false;
+  }
+};
+
+window.disconnectGithub = async () => {
+  if (!fbAuth?.currentUser) return;
+  try {
+    const token = await fbAuth.currentUser.getIdToken();
+    await fetch(window.API_BASE_WIZARD + "/api/github/disconnect", {
+      method: "POST",
+      headers: { authorization: "Bearer " + token },
+    });
+  } catch (e) {
+    wizardLog("warn", "github.disconnect_err", e.message);
+  }
+  ghConnectionState = { connected: false };
+  state.ghUser = "";
+  state.ghOauth = false;
+  saveState();
+  wizardLog("info", "github.disconnected");
+  renderGithubStep();
+};
+
+// GitHub OAuth コールバック (?gh=connected&login=... or ?gh_error=...) の処理。
+// 戻り直後は state.step が "github" 以外でも github ステップに戻す。
+function handleGithubReturn() {
+  const params = new URLSearchParams(location.search);
+  const gh = params.get("gh");
+  const err = params.get("gh_error");
+  const detail = params.get("gh_detail");
+  const login = params.get("login");
+  if (gh === "connected") {
+    wizardLog("info", "github.oauth_callback_ok", login || "(no login in query)");
+    if (login) { state.ghUser = login; state.ghOauth = true; }
+    // クエリ消す (再読み込みで重複処理しない)
+    history.replaceState({}, "", location.pathname);
+    if (state.step !== "github") {
+      state.step = "github";
+    }
+    saveState();
+    return true;
+  }
+  if (err) {
+    wizardLog("error", "github.oauth_callback_err", `${err}${detail ? ": " + detail : ""}`);
+    history.replaceState({}, "", location.pathname);
+    // github ステップに戻して再試行できるように
+    if (state.step !== "github") {
+      state.step = "github";
+      saveState();
+    }
+    const errEl = document.getElementById("ghErr");
+    if (errEl) errEl.textContent = `OAuth エラー: ${err}${detail ? " " + detail : ""}`;
+    return false;
+  }
+  return false;
+}
 
 function labelOf(q, v) {
   if (!v) return "";
@@ -1002,6 +1187,8 @@ window.addEventListener("unhandledrejection", (ev) => {
 // ───────── Init Firebase ─────────
 (async function init() {
   wizardLog("info", "init.start", `host=${location.hostname} api=${window.API_BASE_WIZARD || "(none)"} ua=${navigator.userAgent.slice(0,80)}`);
+  // GitHub OAuth コールバック直後だったら state を github に巻き戻す (handleGithubReturn 内で)
+  handleGithubReturn();
   try {
     const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
     cfg.authDomain = location.hostname; // iOS Safari ITP 対策
@@ -1022,9 +1209,16 @@ window.addEventListener("unhandledrejection", (ev) => {
       diagLog(`redirectResult ERR ${e.code || ""} ${e.message}`);
       wizardLog("warn", "auth.redirect_err", `${e.code || "?"} ${e.message}`);
     }
-    onAuthStateChanged(fbAuth, (user) => {
+    onAuthStateChanged(fbAuth, async (user) => {
       wizardLog("debug", "auth.state", user ? user.email : "signed-out");
-      if (user) onAuthed(user);
+      if (user) {
+        onAuthed(user);
+        // サインイン直後に GitHub 連携状態も取得 (連携済みなら state.ghUser が埋まる)
+        await loadGithubStatus();
+        if (state.step === "github") renderGithubStep();
+      } else {
+        ghConnectionState = { connected: false };
+      }
     });
   } catch (e) {
     diagLog(`init ERR ${e.message}`);
@@ -1032,6 +1226,10 @@ window.addEventListener("unhandledrejection", (ev) => {
     const errEl = document.getElementById("googleErr");
     if (errEl) errEl.textContent = "init失敗: " + e.message;
   }
+  // wizard 全体設定 (GitHub OAuth 利用可否) を並行ロード
+  loadWizardConfig().then(() => {
+    if (state.step === "github") renderGithubStep();
+  });
   render();
 })();
 </script>

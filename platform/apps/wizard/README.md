@@ -12,7 +12,7 @@
 
 ユーザーがやることは以下だけ:
 1. **Google ログイン** (Firebase Auth)
-2. **GitHub 連携** (現状はユーザー名手入力、後で正式 OAuth に置換)
+2. **GitHub 連携** (OAuth で「GitHub で続行」ボタン 1 回。`read:user` + `public_repo` 権限のみ要求、未設定 / fallback 時のみ手入力)
 3. **4 つの設問にクリック回答** (スキル / 作りたいもの / 業界 / チームサイズ)
 4. **オプション選択 + 月額試算** (Cloud SQL / Storage / Cloud Run 常時 hot 等の有料サービスを toggle で選択、選択に応じて月額が live で更新)
 5. **確認 → 開始ボタン**
@@ -25,6 +25,45 @@
 - Cloud Build トリガ作成 + 初回デプロイ
 - Firebase Auth プロバイダ有効化 + 認可ドメイン追加
 - OAuth redirect URI 追加 (現状唯一の手動 GCP コンソール作業)
+
+## GitHub OAuth (Step 2)
+
+ユーザーが GitHub アカウントを wizard に連携する。テンプレ repo を fork したり、後で Cloud Build と接続したりするのに使う access_token を取る。
+
+### フロー
+
+1. フロント: 「GitHub で続行」ボタン → `POST /api/github/start` (Firebase ID トークン付き)
+2. backend: state を Firestore `wizard_oauth_states/{state}` に保存、GitHub authorize URL を返す
+3. フロント: `location.href` で遷移
+4. GitHub で承認 → GitHub が `GET <wizard-api>/api/github/callback?code&state` にリダイレクト
+5. backend: state 検証 → code → access_token 交換 → user info 取得 → `wizard_users/{uid}.github` に保存
+6. backend: `HOSTING_BASE/wizard/?gh=connected&login=<username>` にリダイレクト
+7. フロント: クエリ読んで連携済み表示
+
+### オーナーの 1 回作業
+
+1. **GitHub OAuth App 登録**: https://github.com/settings/developers → New OAuth App
+   - **Application name**: 何でも (例: claude-studio wizard)
+   - **Homepage URL**: `https://code-studio-497311-app.web.app`
+   - **Authorization callback URL**: `https://<wizard-api Cloud Run URL>/api/github/callback`
+     (wizard-api を 1 度デプロイした後で URL が判明する。初回は仮値 `https://example.com` で登録 → デプロイ後に更新でも OK)
+
+2. **bootstrap.sh に渡す**:
+   ```bash
+   GITHUB_CLIENT_ID=Iv1.xxxxx \
+   GITHUB_CLIENT_SECRET=xxxxx \
+   bash platform/infra/bootstrap.sh
+   ```
+   (環境変数を渡せば対話 prompt スキップ、すでに secret がある場合は値を更新)
+
+3. **wizard-api を再デプロイ**: 何でもいいので wizard/ 配下に commit → main push、または Cloud Build Console で `wizard-api-deploy` トリガを手動実行
+   → 新しい `_GITHUB_CLIENT_ID` substitution と最新の secret が Cloud Run に注入される
+
+### OAuth 未設定 / 設定中の挙動
+
+- `GITHUB_CLIENT_ID` が空 or Secret Manager の値が空 → `/api/wizard/config` が `github_oauth_available: false` を返す
+- フロント: 「GitHub で続行」ボタンの代わりに**ユーザー名手入力 fallback** を表示
+- これで OAuth 設定前でも wizard は動く
 
 ## オプション + 月額試算 (Step 4)
 
@@ -142,7 +181,7 @@ bootstrap.sh は既存リソースに対しては冪等。新規追加分 (Fires
 - [x] Firestore で submit 永続化
 - [x] フロントエンドが実 API を叩いて状態 polling
 - [x] 構造化ログ + 詳細ログパネル + Cloud Logs/Firestore 直リンク
-- [ ] GitHub OAuth 正式連携 (今はユーザー名手入力)
+- [x] GitHub OAuth 正式連携 (Step 2、未設定なら手入力 fallback)
 - [ ] Google OAuth `cloud-platform` スコープ取得 (Google App 検証通す)
 - [ ] Cloud Tasks chain で各ステップを非同期実行 (途中失敗からの再開)
 - [ ] 各ステップの実装 (create-project, enable-apis, provision-shared, fork-template, ...)

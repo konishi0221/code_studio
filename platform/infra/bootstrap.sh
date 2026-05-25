@@ -114,6 +114,54 @@ else
   sub "already exists. To rotate: echo -n <key> | gcloud secrets versions add gemini-api-key --data-file=-"
 fi
 
+step "GitHub OAuth App (for wizard's automatic fork)"
+# wizard-api がユーザーの GitHub アカウントを連携して、テンプレ repo を
+# 自動 fork するために必要。GitHub OAuth App は github.com/settings/developers
+# で登録 (アプリ名は何でも OK、Homepage = https://<HOSTING_SITE>.web.app):
+#   - Authorization callback URL: https://<wizard-api Cloud Run URL>/api/github/callback
+#     (Cloud Run URL は wizard-api を最初にデプロイした後でわかる。
+#      仮で https://example.com にしておいて、後で更新でも OK)
+# Client ID はトリガの substitution _GITHUB_CLIENT_ID で wizard-api に注入。
+# Client Secret は Secret Manager (github-oauth-client-secret) に保管。
+# 未設定でも wizard は動く (GitHub OAuth ボタンが「未設定」表示で fallback の手入力)。
+#
+# 環境変数で渡せば対話 prompt をスキップ:
+#   GITHUB_CLIENT_ID=Iv1.xxx GITHUB_CLIENT_SECRET=xxx bash bootstrap.sh
+GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:-}"
+if [[ -z "$GITHUB_CLIENT_ID" ]]; then
+  echo "  Register an OAuth App at: https://github.com/settings/developers"
+  echo "  (blank to skip — you can re-run this script later to set them)"
+  read -rp "  GitHub OAuth Client ID (blank to skip): " GITHUB_CLIENT_ID
+fi
+if ! gcloud secrets describe github-oauth-client-secret >/dev/null 2>&1; then
+  if [[ -n "${GITHUB_CLIENT_SECRET:-}" ]]; then
+    GH_SECRET="$GITHUB_CLIENT_SECRET"
+  elif [[ -n "$GITHUB_CLIENT_ID" ]]; then
+    read -srp "  GitHub OAuth Client Secret (input hidden): " GH_SECRET; echo
+  else
+    GH_SECRET=""
+  fi
+  if [[ -n "$GH_SECRET" ]]; then
+    printf "%s" "$GH_SECRET" | gcloud secrets create github-oauth-client-secret \
+      --replication-policy=automatic --data-file=-
+    sub "  client_secret stored"
+  else
+    # 空 placeholder: 後で値を入れるまで wizard-api 側で githubOAuthAvailable()=false。
+    printf "" | gcloud secrets create github-oauth-client-secret \
+      --replication-policy=automatic --data-file=-
+    sub "  placeholder created (no GitHub OAuth). Set later with:"
+    sub "    echo -n <secret> | gcloud secrets versions add github-oauth-client-secret --data-file=-"
+  fi
+else
+  if [[ -n "${GITHUB_CLIENT_SECRET:-}" ]]; then
+    printf "%s" "$GITHUB_CLIENT_SECRET" | gcloud secrets versions add github-oauth-client-secret --data-file=-
+    sub "  client_secret rotated"
+  else
+    sub "  client_secret already exists. To rotate: echo -n <secret> | gcloud secrets versions add github-oauth-client-secret --data-file=-"
+  fi
+fi
+[[ -n "$GITHUB_CLIENT_ID" ]] && sub "  client_id=${GITHUB_CLIENT_ID} (passed to wizard trigger as _GITHUB_CLIENT_ID)"
+
 # Only create the shared Cloud SQL instance if at least one app declares
 # HAS_DB=true. Cloud SQL db-f1-micro costs ~$9/month even idle, so skipping
 # it when no app needs DB matters for solo/learning setups.
@@ -284,9 +332,17 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
   # Trigger substitutions. Use `^||^` separator so values containing commas
   # (e.g. multi-email ALLOWED_EMAILS) are not mis-split.
   SUBS="^||^_INVOKER=user:${OWNER_EMAIL}||_HOSTING_SITE=${HOSTING_SITE}||_ALLOWED_EMAILS=${OWNER_EMAIL}"
+  # wizard-api だけ追加で GitHub OAuth Client ID を渡す (empty なら wizard 側で
+  # OAuth ボタンが未設定表示になり、手入力 fallback に切り替わる)。
+  if [[ "$APP" == "wizard" ]]; then
+    SUBS="${SUBS}||_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}"
+  fi
 
   if gcloud builds triggers describe "${SERVICE}-deploy" >/dev/null 2>&1; then
-    sub "  trigger already exists (delete & re-run to recreate)"
+    sub "  trigger exists — updating substitutions"
+    gcloud builds triggers update "${SERVICE}-deploy" \
+      --substitutions="$SUBS" --quiet 2>/dev/null || \
+      sub "  ⚠ substitutions update failed (gcloud version too old?). Delete trigger & re-run to recreate."
   else
     gcloud builds triggers create github \
       --name="${SERVICE}-deploy" \
@@ -320,10 +376,18 @@ cat <<EOF
      Web client → Authorized redirect URIs):
        https://${HOSTING_SITE}.web.app/__/auth/handler
 
-  4. First manual deploy of any app:
+  4. (Optional, for wizard automatic GitHub fork) Register a GitHub OAuth App:
+     https://github.com/settings/developers → New OAuth App
+       - Homepage URL: https://${HOSTING_SITE}.web.app
+       - Authorization callback URL: (wait until wizard-api is deployed,
+         then set to https://<wizard-api Cloud Run URL>/api/github/callback)
+     Re-run this script with GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET env vars
+     (or interactive prompt) to wire it up.
+
+  5. First manual deploy of any app:
        gcloud builds submit --config=${BASE_DIR}/apps/<app>/cloudbuild.yaml --region=${REGION} .
 
-  5. Service URLs:
+  6. Service URLs:
        gcloud run services list --region=${REGION}
 
   Hosting URL (after first deploy): https://${HOSTING_SITE}.web.app

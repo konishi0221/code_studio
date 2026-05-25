@@ -3,7 +3,6 @@
 // Receives setup submissions from /wizard/ frontend, persists to Firestore
 // for tracking. Future phases will:
 //   - exchange Google OAuth token for cloud-platform scoped credentials
-//   - exchange GitHub OAuth code for a personal access token
 //   - kick off Cloud Tasks chain that provisions the user's GCP project
 //
 // For now (α): we record the submission and return status=manual_required,
@@ -13,12 +12,17 @@
 import express from "express";
 import admin from "firebase-admin";
 import { Firestore } from "@google-cloud/firestore";
+import crypto from "node:crypto";
 
 const {
   FIREBASE_PROJECT_ID,
   ALLOWED_EMAILS = "",
   DEV,
   PORT = 8080,
+  GITHUB_CLIENT_ID = "",
+  GITHUB_CLIENT_SECRET = "",
+  HOSTING_BASE = "",   // 例: https://code-studio-497311-app.web.app
+  WIZARD_API_BASE = "", // 例: https://wizard-api-xxxx.run.app (callback URL の組み立て用)
 } = process.env;
 
 admin.initializeApp({ projectId: FIREBASE_PROJECT_ID || undefined });
@@ -45,8 +49,15 @@ app.get("/health", (req, res) => {
   res.json({ ok: true, service: "wizard-api" });
 });
 
-// Firebase ID トークン検証
+// Firebase ID トークン検証。
+// パブリック (auth 不要) なルートはここでスキップ:
+//   - /api/wizard/config   : フロントが OAuth 利用可否を判定する用
+//   - /api/github/callback : GitHub から戻ってくる redirect (Bearer 無い)
+// req.path は app.use("/api", ...) のマウント先からの相対パスなので /api 抜き。
+const PUBLIC_API_PATHS = new Set(["/wizard/config", "/github/callback"]);
+
 app.use("/api", async (req, res, next) => {
+  if (PUBLIC_API_PATHS.has(req.path)) return next();
   if (DEV) { req.user = { uid: "dev", email: "dev@local" }; return next(); }
   try {
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
@@ -261,6 +272,169 @@ app.get("/api/wizard/runs", async (req, res) => {
       created_at: d.data().created_at?.toDate?.()?.toISOString?.() || null,
     })),
   });
+});
+
+// ──────────────────────────────────────────
+// GitHub OAuth (Phase 1 自動セットアップ)
+//
+// フロー:
+//   1. フロント: ボタン押す → POST /api/github/start (with Firebase ID token)
+//   2. backend: state を Firestore に保存 → GitHub authorize URL を返す
+//   3. フロント: そこへ window.location.href で遷移
+//   4. ユーザーが GitHub で承認 → GitHub が GET /api/github/callback?code&state にリダイレクト
+//   5. backend: state 検証 → code を access_token に交換 → ユーザー情報取得 →
+//      wizard_users/{uid}.github に保存 → HOSTING_BASE/wizard/?gh=connected にリダイレクト
+//   6. フロント: クエリパラメータ読んで「連携済み」表示
+//
+// 設定 (オーナーが github.com/settings/developers で OAuth App 登録):
+//   - Authorization callback URL: <WIZARD_API_BASE>/api/github/callback
+//   - GITHUB_CLIENT_ID: env (cloudbuild.yaml で --set-env-vars 経由)
+//   - GITHUB_CLIENT_SECRET: Secret Manager (--set-secrets 経由)
+// ──────────────────────────────────────────
+const OAUTH_STATES = db.collection("wizard_oauth_states");
+const WIZARD_USERS = db.collection("wizard_users");
+
+function githubOAuthAvailable() {
+  return !!(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET);
+}
+
+// GET /api/wizard/config — フロントが「GitHub OAuth が使えるか」を判定する用 (no-auth)
+app.get("/api/wizard/config", (req, res) => {
+  res.json({
+    github_oauth_available: githubOAuthAvailable(),
+    hosting_base: HOSTING_BASE || null,
+  });
+});
+
+// POST /api/github/start — Firebase 認証必須。GitHub authorize URL を返す
+app.post("/api/github/start", async (req, res) => {
+  if (!githubOAuthAvailable()) {
+    return res.status(503).json({ error: "GitHub OAuth 未設定 (GITHUB_CLIENT_ID/SECRET 必要)" });
+  }
+  const stateRand = crypto.randomBytes(24).toString("hex");
+  await OAUTH_STATES.doc(stateRand).set({
+    uid: req.user.uid,
+    email: req.user.email || "",
+    created_at: admin.firestore.Timestamp.now(),
+  });
+  const callbackUrl = `${WIZARD_API_BASE || `${req.protocol}://${req.get("host")}`}/api/github/callback`;
+  const url = "https://github.com/login/oauth/authorize?" + new URLSearchParams({
+    client_id: GITHUB_CLIENT_ID,
+    scope: "read:user public_repo",
+    state: stateRand,
+    redirect_uri: callbackUrl,
+    allow_signup: "true",
+  }).toString();
+  console.log(JSON.stringify({ severity: "INFO", code: "github.oauth_start", uid: req.user.uid, callback: callbackUrl }));
+  res.json({ auth_url: url });
+});
+
+// GET /api/github/callback — GitHub からの帰り (Firebase 認証なしで直で叩かれる)
+app.get("/api/github/callback", async (req, res) => {
+  const { code, state, error: ghError, error_description } = req.query;
+  const back = (params) => {
+    const base = HOSTING_BASE || "/";
+    const qs = new URLSearchParams(params).toString();
+    return res.redirect(`${base}/wizard/?${qs}`);
+  };
+  if (ghError) {
+    console.warn(`[github.callback] user denied or error: ${ghError} ${error_description}`);
+    return back({ gh_error: String(ghError).slice(0, 80) });
+  }
+  if (!code || !state) {
+    return back({ gh_error: "missing_code_or_state" });
+  }
+  const stateSnap = await OAUTH_STATES.doc(String(state)).get();
+  if (!stateSnap.exists) {
+    return back({ gh_error: "invalid_state" });
+  }
+  const stateData = stateSnap.data();
+  await stateSnap.ref.delete().catch(() => {});
+  // 30 分以内に使われなかったらタイムアウト扱い (Firestore TTL 設定でもよいが、念のため明示)
+  const ageMs = Date.now() - (stateData.created_at?.toMillis?.() || 0);
+  if (ageMs > 30 * 60 * 1000) return back({ gh_error: "state_expired" });
+
+  const callbackUrl = `${WIZARD_API_BASE || `${req.protocol}://${req.get("host")}`}/api/github/callback`;
+  try {
+    // 1. code → access_token
+    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: { Accept: "application/json", "content-type": "application/json" },
+      body: JSON.stringify({
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
+        code,
+        redirect_uri: callbackUrl,
+      }),
+    });
+    const tokenJson = await tokenRes.json();
+    if (!tokenJson.access_token) {
+      console.error(`[github.callback] token exchange failed: ${JSON.stringify(tokenJson)}`);
+      return back({ gh_error: "token_exchange_failed" });
+    }
+
+    // 2. user info
+    const userRes = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `token ${tokenJson.access_token}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "claude-studio-wizard",
+      },
+    });
+    if (!userRes.ok) {
+      const t = await userRes.text();
+      console.error(`[github.callback] user fetch failed: ${userRes.status} ${t.slice(0,200)}`);
+      return back({ gh_error: "user_fetch_failed" });
+    }
+    const ghUser = await userRes.json();
+
+    // 3. 保存: wizard_users/{uid}.github
+    // access_token は将来 fork 等で使うので保存 (TODO: encrypt at rest)
+    await WIZARD_USERS.doc(stateData.uid).set({
+      github: {
+        login: ghUser.login,
+        id: ghUser.id,
+        avatar_url: ghUser.avatar_url || "",
+        access_token: tokenJson.access_token,
+        scope: tokenJson.scope || "",
+        connected_at: admin.firestore.Timestamp.now(),
+      },
+    }, { merge: true });
+
+    console.log(JSON.stringify({
+      severity: "INFO", code: "github.oauth_connected",
+      uid: stateData.uid, login: ghUser.login, scope: tokenJson.scope,
+    }));
+    return back({ gh: "connected", login: ghUser.login });
+  } catch (e) {
+    console.error(`[github.callback] exception: ${e.message}`);
+    return back({ gh_error: "exception", gh_detail: String(e.message).slice(0, 80) });
+  }
+});
+
+// GET /api/github/me — 現在の Firebase user が GitHub 連携してるか確認 (auth 必須)
+app.get("/api/github/me", async (req, res) => {
+  const doc = await WIZARD_USERS.doc(req.user.uid).get();
+  if (!doc.exists || !doc.data().github?.login) {
+    return res.json({ connected: false });
+  }
+  const g = doc.data().github;
+  res.json({
+    connected: true,
+    login: g.login,
+    avatar_url: g.avatar_url || "",
+    scope: g.scope || "",
+    connected_at: g.connected_at?.toDate?.()?.toISOString?.() || null,
+  });
+});
+
+// POST /api/github/disconnect — 連携解除 (auth 必須)
+app.post("/api/github/disconnect", async (req, res) => {
+  await WIZARD_USERS.doc(req.user.uid).set({
+    github: admin.firestore.FieldValue.delete(),
+  }, { merge: true });
+  console.log(JSON.stringify({ severity: "INFO", code: "github.disconnected", uid: req.user.uid }));
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => {
