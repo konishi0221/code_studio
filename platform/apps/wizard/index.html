@@ -220,27 +220,31 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
     <div class="card-title">確認</div>
     <div class="card-sub">この内容でセットアップを開始します。</div>
     <div class="summary" id="summary"></div>
-    <button class="cta primary" onclick="submit()">
+    <button class="cta primary" id="submitBtn" onclick="submit()">
       <span class="icon">rocket_launch</span>
       セットアップ開始
     </button>
+    <div class="err-msg" id="submitErr"></div>
   </section>
 
-  <!-- ───── Step 6: Done (stub) ───── -->
+  <!-- ───── Step 6: Done ───── -->
   <section class="card" data-step="done" hidden>
-    <span class="card-icon" style="color:var(--warn);">construction</span>
-    <div class="card-title">バックエンド実装中</div>
-    <div class="card-sub">
-      ここまでの入力は保存されました。<br>
-      自動プロビジョン (GCP API 有効化・Cloud SQL・Cloud Build トリガ作成等) のバックエンドは段階的に実装中です。
+    <span class="card-icon" id="doneIcon" style="color:var(--accent);">task_alt</span>
+    <div class="card-title" id="doneTitle">受付完了</div>
+    <div class="card-sub" id="doneSub">
+      入力をバックエンドに送信しました。状況を取得しています…
     </div>
-    <div class="notice">
+
+    <div id="runStatus" style="margin:18px 0;"></div>
+
+    <div class="notice" id="manualNotice" hidden>
       <span class="icon">info</span>
       <div>
-        <b>今すぐ立ち上げたい方</b><br>
-        当面は <code>platform/infra/bootstrap.sh</code> を Cloud Shell で手動実行する手順を案内します。詳細は <a href="/help/" style="color:var(--warn); font-weight:800;">AI ヘルプ</a> へ。
+        <b>現状: バックエンドは受付まで実装済</b><br>
+        GCP プロビジョンの自動化は段階的に実装中。当面はオーナー側で <code>infra/bootstrap.sh</code> を手動実行して進めます。詳細や進捗確認は <a href="/help/" style="color:#b85e02; font-weight:800;">AI ヘルプ</a> へ。
       </div>
     </div>
+
     <div class="summary" id="summary2" style="margin-top:14px;"></div>
     <button class="cta" onclick="location.href='/'">
       <span class="icon">home</span>
@@ -255,6 +259,7 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
   <div class="foot">CLAUDE-STUDIO WIZARD · v0 (α)</div>
 </div>
 
+<script src="/config.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
@@ -333,6 +338,10 @@ function render() {
   if (state.step === "confirm" || state.step === "done") {
     const target = state.step === "confirm" ? "summary" : "summary2";
     renderSummary(target);
+  }
+  // done に直接戻ってきた (リロード等) で run id がある → polling 再開
+  if (state.step === "done" && state.runId && !pollTimer) {
+    pollRun();
   }
 }
 
@@ -453,17 +462,128 @@ document.getElementById("ghUser")?.addEventListener("input", (e) => {
   saveState();
 });
 
-// ───────── Submit (stub) ─────────
-window.submit = () => {
-  // 本来はここでバックエンド (Cloud Run worker) に POST して
-  // Cloud Tasks chain で GCP プロビジョンを開始する。
-  // 現状はバックエンド未実装なので、状態保存だけして done ステップへ。
-  state.submittedAt = new Date().toISOString();
-  saveState();
-  state.step = "done";
-  saveState();
-  render();
+// ───────── Submit (実 API 呼び出し) ─────────
+// wizard-api (Cloud Run) に POST し、返ってきた run_id を localStorage に
+// 保存。done ステップに遷移してから run の状態を polling。
+window.submit = async () => {
+  const errEl = document.getElementById("submitErr");
+  const btn = document.getElementById("submitBtn");
+  errEl.textContent = "";
+  if (!fbAuth?.currentUser) {
+    errEl.textContent = "サインインが切れてます。Step 1 からやり直してください。";
+    return;
+  }
+  const apiBase = window.API_BASE_WIZARD || "";
+  if (!apiBase) {
+    errEl.textContent = "wizard-api URL が未注入。オーナーに bootstrap.sh / Cloud Build の状況確認を依頼してください。";
+    return;
+  }
+  btn.disabled = true;
+  btn.querySelector(".icon").textContent = "hourglass_top";
+  try {
+    const token = await fbAuth.currentUser.getIdToken();
+    const res = await fetch(apiBase + "/api/wizard/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + token },
+      body: JSON.stringify({
+        skill: state.quiz.skill,
+        goal: state.quiz.goal,
+        industry: state.quiz.industry,
+        team: state.quiz.team,
+        github_username: state.ghUser || "",
+      }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t.slice(0, 600)}`);
+    }
+    const data = await res.json();
+    state.runId = data.run_id;
+    state.submittedAt = new Date().toISOString();
+    saveState();
+    state.step = "done";
+    saveState();
+    render();
+    pollRun();
+  } catch (e) {
+    errEl.textContent = "送信失敗: " + e.message;
+    btn.disabled = false;
+    btn.querySelector(".icon").textContent = "rocket_launch";
+  }
 };
+
+// done ステップで run の状態を polling 表示。
+let pollTimer = null;
+async function pollRun() {
+  if (!state.runId || !fbAuth?.currentUser) return;
+  const apiBase = window.API_BASE_WIZARD || "";
+  if (!apiBase) return;
+  const statusEl = document.getElementById("runStatus");
+  const titleEl = document.getElementById("doneTitle");
+  const subEl = document.getElementById("doneSub");
+  const iconEl = document.getElementById("doneIcon");
+  const noticeEl = document.getElementById("manualNotice");
+  async function tick() {
+    try {
+      const token = await fbAuth.currentUser.getIdToken();
+      const res = await fetch(apiBase + `/api/wizard/runs/${encodeURIComponent(state.runId)}`, {
+        headers: { authorization: "Bearer " + token },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      renderRunStatus(d, { statusEl, titleEl, subEl, iconEl, noticeEl });
+      // 完了 / 手動待ちなら polling 終了
+      if (d.status === "completed" || d.status === "failed" || d.status === "manual_required") {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    } catch (e) {
+      statusEl.innerHTML = `<div class="err-msg">状態取得失敗: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+  tick();
+  pollTimer = setInterval(tick, 4000);
+}
+
+function renderRunStatus(d, els) {
+  els.statusEl.innerHTML = `
+    <div style="font-size:11px; color:var(--text3); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">RUN ID: ${escapeHtml(d.id)}</div>
+    ${(d.steps || []).map(s => `
+      <div style="display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid rgba(66,69,94,0.08); font-size:13px;">
+        <span class="icon" style="font-family:'Material Symbols Outlined'; font-size:18px; color:${s.status === 'done' ? 'var(--accent)' : s.status === 'failed' ? 'var(--err)' : 'var(--text3)'}; font-variation-settings:'FILL' 1,'wght' 600;">
+          ${s.status === 'done' ? 'check_circle' : s.status === 'failed' ? 'error' : 'pending'}
+        </span>
+        <div style="flex:1;">
+          <div style="font-weight:700;">${escapeHtml(s.name)}</div>
+          ${s.message ? `<div style="font-size:11px; color:var(--text2); font-weight:500; line-height:1.5;">${escapeHtml(s.message)}</div>` : ""}
+        </div>
+      </div>
+    `).join("")}
+  `;
+  if (d.status === "manual_required") {
+    els.titleEl.textContent = "受付完了 (オーナー側で手動セットアップ待ち)";
+    els.subEl.textContent = "入力は保存されました。自動プロビジョンは未実装なので、現状はオーナーが手動でセットアップを進めます。";
+    els.iconEl.style.color = "var(--warn)";
+    els.iconEl.textContent = "schedule";
+    els.noticeEl.hidden = false;
+  } else if (d.status === "completed") {
+    els.titleEl.textContent = "セットアップ完了";
+    els.subEl.textContent = "あなた専用の URL が稼働開始しました。";
+    els.iconEl.style.color = "var(--accent)";
+    els.iconEl.textContent = "task_alt";
+    els.noticeEl.hidden = true;
+  } else if (d.status === "failed") {
+    els.titleEl.textContent = "失敗";
+    els.subEl.textContent = "途中で止まりました。AI ヘルプで状況を確認してください。";
+    els.iconEl.style.color = "var(--err)";
+    els.iconEl.textContent = "error";
+    els.noticeEl.hidden = true;
+  } else {
+    els.titleEl.textContent = "セットアップ進行中";
+    els.subEl.textContent = "GCP プロビジョンを実行中…";
+    els.iconEl.textContent = "sync";
+  }
+}
 
 // ───────── Init Firebase ─────────
 (async function init() {

@@ -2,8 +2,11 @@
 
 エンドユーザーが自分の GCP プロジェクトに claude-studio 一式を立ち上げるための Setup Wizard。
 
-> 現状 **α 実装**。UI フロー (Google サインイン・GitHub ユーザー名入力・スキル/業種アンケート・確認画面) は動く。
-> バックエンド自動プロビジョン (GCP API 有効化・Cloud SQL・Cloud Build トリガ作成等) は未実装で、最後のステップで「実装中」表示。
+> 現状 **α 実装**。
+> - **UI**: 全ステップ動く (welcome → Google サインイン → GitHub 名入力 → アンケート → 確認 → 進捗表示)
+> - **バックエンド (Cloud Run `wizard-api`)**: 実装済。submit を受け取って Firestore (`wizard_runs/{id}`) に永続化、状態取得 (poll) も可能
+> - **自動プロビジョン本体**: 未実装。現状は status=`manual_required` で止まる (オーナーが手動で `infra/bootstrap.sh` 実行する流れ)
+> - **次フェーズ**: GitHub OAuth 正式連携 → Cloud Tasks chain で GCP プロビジョン
 
 ## ユーザー側の作業を最小化する設計方針
 
@@ -38,10 +41,15 @@ Step 3 のアンケートは単なるセットアップ情報ではなく、**�
 - 入力フォーム + 4 つの選択肢グループ
 - 完了 → バックエンドへの POST (未実装) → 進捗表示 (未実装)
 
-### バックエンド (未実装、`platform/apps/wizard/server/` 想定)
-- Cloud Run worker が gcloud SDK or Cloud Client Libraries で操作
-- Cloud Tasks chain で長時間処理をステップ分割 (回線切れ耐性)
-- 各ステップの状態を Firestore に書く
+### バックエンド (`platform/apps/wizard/server/` 実装済 α)
+- Express on Cloud Run (`wizard-api`)
+- 認証: Firebase ID トークン検証 (任意の Google ユーザー、`ALLOWED_EMAILS` で絞れる)
+- エンドポイント:
+  - `POST /api/wizard/submit` — submit を Firestore `wizard_runs/{id}` に保存、`run_id` を返す
+  - `GET /api/wizard/runs/:id` — 本人 or オーナーが状態取得
+  - `GET /api/wizard/runs` — 自分の最近の run 一覧
+- 将来 Cloud Tasks chain で各 step を進める (現状は status=`manual_required` で止まる)
+- Firestore SA は `wizard-run`、`roles/datastore.user` を `EXTRA_ROLES` で付与
 
 ## バックエンドでやる予定の処理 (Cloud Tasks chain 単位)
 
@@ -73,16 +81,37 @@ Step 3 のアンケートは単なるセットアップ情報ではなく、**�
 ```
 wizard/
 ├── README.md           ← これ
-└── index.html          ← UI + サインイン + フォーム + localStorage (バックエンド呼び出しは stub)
+├── index.html          ← UI + サインイン + フォーム + 実 API 呼び出し + 状態 polling
+├── app.yaml            ← bootstrap.sh が読むメタデータ (EXTRA_ROLES: roles/datastore.user)
+├── cloudbuild.yaml     ← Cloud Build 設定 (wizard-api build + deploy + hosting deploy)
+└── server/             ← Cloud Run コード
+    ├── package.json    ← express + firebase-admin + @google-cloud/firestore
+    ├── Dockerfile
+    ├── .dockerignore
+    └── index.js        ← /api/wizard/submit, /api/wizard/runs[/:id]
 ```
+
+## オーナーが 1 回やる必要のあるセットアップ
+
+このサービスが動くには bootstrap.sh の再実行が必要 (初回 wizard 導入時):
+
+```bash
+bash platform/infra/bootstrap.sh   # firestore API 有効化 + Firestore DB 作成
+                                    # wizard-run SA 作成 + roles/datastore.user 付与
+                                    # wizard-api Cloud Build トリガ作成
+```
+
+bootstrap.sh は既存リソースに対しては冪等。新規追加分 (Firestore, wizard SA, wizard trigger) だけ作る。
 
 ## 残課題
 
+- [x] バックエンド Cloud Run worker 実装 (`apps/wizard/server/`) ← この PR
+- [x] Firestore で submit 永続化 ← この PR
+- [x] フロントエンドが実 API を叩いて状態 polling ← この PR
 - [ ] GitHub OAuth 正式連携 (今はユーザー名手入力)
-- [ ] バックエンド Cloud Run worker 実装 (`apps/wizard/server/`)
-- [ ] Cloud Tasks chain で各ステップを非同期実行
-- [ ] Firestore で進捗状態管理
-- [ ] 進捗バー UI (バックエンド連動)
-- [ ] エラーハンドリング (途中で失敗したら再開可能に)
-- [ ] アンケート結果を `CLAUDE.md` テンプレに焼き込む
-- [ ] OAuth redirect URI 追加の手動ステップを Identity Platform API で自動化
+- [ ] Google OAuth `cloud-platform` スコープ取得 (Google App 検証通す)
+- [ ] Cloud Tasks chain で各ステップを非同期実行 (途中失敗からの再開)
+- [ ] 各ステップの実装 (create-project, enable-apis, provision-shared, fork-template, ...)
+- [ ] 進捗バー UI (現状はステップ一覧表示のみ)
+- [ ] アンケート結果を user 側 `CLAUDE.md` テンプレに焼き込む
+- [ ] オーナー用 admin UI で待機中の run を一覧 / 手動 trigger

@@ -1,0 +1,16 @@
+# wizard : Setup Wizard backend
+# Consumed by infra/bootstrap.sh to provision per-app resources.
+name: wizard
+display_name: Setup Wizard
+SERVICE: wizard-api
+SA: wizard-run
+HAS_DB: "false"
+HAS_BUCKET: "false"
+CLOUDBUILD: platform/apps/wizard/cloudbuild.yaml
+# Firestore access for wizard_runs collection.
+EXTRA_ROLES: roles/datastore.user
+# Rebuild wizard-api when wizard source changes. Hosting deploy of the static
+# frontend lives in apps/help/cloudbuild.yaml (which already redeploys the
+# whole apps/ directory on .md / launcher / debug changes); to avoid duplicate
+# hosting deploys, this trigger only watches the server side.
+EXTRA_TRIGGER_FILES: ""

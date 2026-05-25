@@ -114,22 +114,26 @@ main への push が Cloud Build をキックして本番デプロイされる�
 
 ### トリガの発火条件
 
-現状 Cloud Build トリガは `help-api-deploy` 1 本で、help/cloudbuild.yaml を走らせる。
-このビルドは Cloud Run (help-api) と **Hosting (apps/ 全体)** の両方をデプロイするので、LP / wizard / debug の更新もこのトリガで配信される。
+Cloud Build トリガは 2 本:
 
-発火条件 = `apps/help/**`, `CLAUDE.md`, `README.md`, `DEPLOY.md`, `apps/index.html`, `apps/config.js`, `apps/wizard/**`, `apps/debug/**` のいずれか変更時。
-(`apps/help/app.yaml` の `EXTRA_TRIGGER_FILES` で管理。変更したらオーナー側で `bash platform/infra/bootstrap.sh` 再実行 or Cloud Console でトリガ更新が必要)
+| トリガ | 発火条件 | やること |
+|---|---|---|
+| `help-api-deploy` | `apps/help/**` / `CLAUDE.md` / `README.md` / `DEPLOY.md` / `apps/index.html` / `apps/config.js` / `apps/debug/**` のいずれか変更 | help-api (Cloud Run) ビルド + Hosting (apps/ 全体) デプロイ |
+| `wizard-api-deploy` | `apps/wizard/**` 変更 | wizard-api (Cloud Run) ビルド + Hosting (apps/ 全体) デプロイ |
+
+両方とも Hosting を deploy するので、最後勝ち (Firebase Hosting deploy は冪等)。
+発火条件は各アプリの `app.yaml` の `EXTRA_TRIGGER_FILES` + `apps/<APP>/**` の組み合わせ。変更したらオーナー側で `bash platform/infra/bootstrap.sh` 再実行 or Cloud Console でトリガ更新が必要。
 
 ---
 
 ## 📦 現在のアプリ (このリポ内)
 
-| ディレクトリ | 役割 | 状態 |
-|---|---|---|
-| `apps/` (`/`) | LP | ✅ |
-| `apps/wizard/` (`/wizard/`) | Setup Wizard | α (UI 動く、バックエンド未実装) |
-| `apps/debug/` (`/debug/`) | 内部ランチャー | ✅ |
-| `apps/help/` (`/help/`) | AI ヘルプチャット (Gemini) | ✅ (デバッグ用、最終的に別リポへ) |
+| ディレクトリ | サービス | 役割 | 状態 |
+|---|---|---|---|
+| `apps/` (`/`) | — | LP | ✅ |
+| `apps/wizard/` (`/wizard/`) | `wizard-api` (Cloud Run) | Setup Wizard (Firestore で submit 保管) | α (UI + 受付 API 実装済、自動プロビジョン未実装) |
+| `apps/debug/` (`/debug/`) | — | 内部ランチャー | ✅ |
+| `apps/help/` (`/help/`) | `help-api` (Cloud Run) | AI ヘルプチャット (Gemini) | ✅ (デバッグ用、最終的に別リポへ) |
 
 ---
 

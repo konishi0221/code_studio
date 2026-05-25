@@ -77,7 +77,22 @@ gcloud services enable \
   aiplatform.googleapis.com \
   firebase.googleapis.com \
   firebasehosting.googleapis.com \
-  identitytoolkit.googleapis.com
+  identitytoolkit.googleapis.com \
+  firestore.googleapis.com
+
+step "Firestore default database (used by wizard-api for run state)"
+# Native-mode Firestore in the same region as Cloud Run. Idempotent: if a
+# database already exists, the create call errors with ALREADY_EXISTS and
+# we ignore it.
+if gcloud firestore databases describe --database='(default)' >/dev/null 2>&1; then
+  sub "already exists"
+else
+  gcloud firestore databases create \
+    --database='(default)' \
+    --location="$REGION" \
+    --type=firestore-native \
+    --quiet 2>/dev/null || sub "create skipped (likely already exists or unavailable region)"
+fi
 
 step "Artifact Registry repo: ${REPO_NAME}"
 gcloud artifacts repositories describe "$REPO_NAME" --location="$REGION" >/dev/null 2>&1 || \
