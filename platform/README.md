@@ -3,7 +3,7 @@
 Claude Code で個人・小規模チーム向けのミニアプリを次々作るための GCP プラットフォーム本体。
 `apps/<アプリID>/` を 1 ディレクトリ追加するだけで新しいアプリが立ち上がる。
 
-`main` に push すれば Cloud Build トリガで自動デプロイ → `https://<HOSTING_SITE>.web.app` で公開。
+`main` に push すれば Cloud Build トリガで自動デプロイ → `https://code-studio-497311-app.web.app` で公開。
 
 > このディレクトリ (`platform/`) は claude-studio の運営側 Web 本体。
 > 将来 wizard が各ユーザーの GCP に展開する「ユーザー向けテンプレ」は `template/` (リポ root の兄弟ディレクトリ、未着手)。
@@ -64,7 +64,7 @@ apps/                          ← Hosting 公開ルート
 
 1. `apps/<id>/index.html` と `apps/<id>/README.md` を作る (**1 アプリ＝1 ディレクトリ**)
 2. ランチャー `apps/index.html` の `APPS` 配列に 1 行追加
-3. main に push → 自動デプロイ → `https://<HOSTING_SITE>.web.app/<id>/` で公開
+3. main に push → 自動デプロイ → `https://code-studio-497311-app.web.app/<id>/` で公開
 
 ### ルール
 
@@ -170,7 +170,7 @@ onAuthStateChanged(auth, async (user) => {
 ```
 コード修正 → main に push → Cloud Build トリガ発火 → Docker build → Cloud Run 反映 → Hosting 反映
                                                                 ↓
-                                            ユーザーは https://<HOSTING_SITE>.web.app を開くだけ
+                                            ユーザーは https://code-studio-497311-app.web.app を開くだけ
 ```
 
 main への push が Cloud Build をキックして本番デプロイされる。**`firebase deploy` を直接叩くのは禁止** (古い clone から打つと本番を巻き戻すため)。手動 deploy は `bash infra/deploy-hosting.sh` 経由。
