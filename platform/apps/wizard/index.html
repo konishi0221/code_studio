@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Setup Wizard</title>
+<title>Setup Wizard — claude-studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,129 +15,482 @@
 :root {
   --bg: #e4e6ee; --bg2: #d8dae4; --bg3: #ededf3;
   --sl: rgba(255,255,255,1); --sd: rgba(168,172,192,0.75);
-  --text: #42455e; --text2: rgba(66,69,94,0.42); --text3: rgba(66,69,94,0.22);
+  --text: #42455e; --text2: rgba(66,69,94,0.55); --text3: rgba(66,69,94,0.22);
   --accent: #2a8c3a;
   --warn: #d97706;
+  --err: #b04040;
 }
 body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; }
 
-.top { display: flex; align-items: center; justify-content: space-between; padding: 50px 18px 12px; gap: 10px; }
+.top { display: flex; align-items: center; justify-content: space-between; padding: 32px 18px 8px; gap: 10px; max-width: 580px; margin: 0 auto; }
 .back { background: var(--bg); border: none; padding: 10px 16px; border-radius: 24px; font-family: 'Outfit',sans-serif; font-size: 12px; font-weight: 700; color: var(--text2); cursor: pointer; box-shadow: 5px 5px 12px var(--sd), -5px -5px 12px var(--sl); }
 .back:active { box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl); transform: scale(0.96); }
-.title-bar { flex: 1; text-align: center; font-size: 14px; font-weight: 800; letter-spacing: 0.04em; }
+.title-bar { flex: 1; text-align: center; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; color: var(--text2); }
 .spacer { width: 78px; }
 
-.wrap { padding: 18px 20px 60px; max-width: 540px; margin: 0 auto; }
+.wrap { padding: 12px 20px 60px; max-width: 580px; margin: 0 auto; }
 
-.hero { background: var(--bg); border-radius: 24px; padding: 32px 22px; box-shadow: 10px 10px 26px var(--sd), -8px -8px 22px var(--sl); margin-bottom: 22px; position: relative; overflow: hidden; }
-.hero::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 44%; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%); border-radius: 30px 30px 50% 50%; pointer-events: none; }
-.hero-icon { font-family: 'Material Symbols Outlined'; font-size: 64px; color: var(--accent); display: block; margin: 0 auto 18px; text-align: center; font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 48; opacity: 0.85; }
-.hero-title { font-size: 26px; font-weight: 800; text-align: center; margin-bottom: 8px; }
-.hero-sub { font-size: 13px; color: var(--text2); font-weight: 600; text-align: center; line-height: 1.7; }
+.progress { display: flex; align-items: center; gap: 6px; margin: 8px 4px 20px; }
+.dot { flex: 1; height: 5px; border-radius: 4px; background: var(--bg); box-shadow: inset 2px 2px 4px var(--sd), inset -1px -1px 3px var(--sl); transition: background 0.25s; }
+.dot.on { background: var(--accent); box-shadow: 0 2px 6px rgba(42,140,58,0.45); }
 
-.notice { background: rgba(217,119,6,0.12); color: var(--warn); border-radius: 16px; padding: 14px 16px; font-size: 12px; font-weight: 700; margin-bottom: 22px; display: flex; align-items: flex-start; gap: 10px; }
-.notice .icon { font-size: 18px; flex-shrink: 0; line-height: 1.6; font-variation-settings: 'FILL' 1, 'wght' 600; }
-.notice b { display: block; font-size: 13px; margin-bottom: 2px; }
+.card { background: var(--bg); border-radius: 22px; padding: 26px 22px; box-shadow: 8px 8px 22px var(--sd), -6px -6px 18px var(--sl); position: relative; overflow: hidden; margin-bottom: 16px; }
+.card::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 40%; background: linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 100%); border-radius: 30px 30px 50% 50%; pointer-events: none; }
+.card-icon { font-family: 'Material Symbols Outlined'; font-size: 56px; color: var(--accent); display: block; margin: 0 auto 12px; text-align: center; font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 48; opacity: 0.9; }
+.card-title { font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 8px; letter-spacing: -0.005em; }
+.card-sub { font-size: 13px; color: var(--text2); font-weight: 500; text-align: center; line-height: 1.7; }
 
-.section-title { font-size: 11px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text2); margin: 22px 4px 12px; }
+.eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; color: var(--text2); text-transform: uppercase; text-align: center; margin-bottom: 8px; }
 
-.steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
-.step { background: var(--bg); border-radius: 18px; padding: 18px 18px 16px 60px; box-shadow: 6px 6px 18px var(--sd), -4px -4px 14px var(--sl); position: relative; }
-.step-num { position: absolute; top: 18px; left: 18px; width: 30px; height: 30px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--text); box-shadow: inset 3px 3px 8px var(--sd), inset -2px -2px 6px var(--sl); }
-.step-title { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
-.step-desc { font-size: 12px; color: var(--text2); font-weight: 600; line-height: 1.6; }
-.step-meta { font-size: 10px; color: var(--text3); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 6px; }
+.cta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 18px 24px; border-radius: 30px; font-size: 15px; font-weight: 800; border: none; cursor: pointer; font-family: 'Outfit',sans-serif; background: var(--bg); color: var(--text); box-shadow: 6px 6px 16px var(--sd), -4px -4px 12px var(--sl); margin-top: 14px; transition: transform 0.12s, box-shadow 0.12s; }
+.cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.cta:not(:disabled):active { transform: scale(0.97); box-shadow: inset 4px 4px 10px var(--sd), inset -3px -3px 8px var(--sl); }
+.cta.primary:not(:disabled) { background: var(--accent); color: white; box-shadow: 6px 6px 18px rgba(42,140,58,0.45), -4px -4px 12px var(--sl); }
+.cta.primary:not(:disabled):active { box-shadow: inset 4px 4px 10px rgba(0,0,0,0.18); }
+.cta .icon { font-size: 18px; font-variation-settings: 'FILL' 1, 'wght' 600; }
 
-.cta { display: block; width: 100%; padding: 18px 24px; border-radius: 30px; font-size: 15px; font-weight: 800; border: none; font-family: 'Outfit',sans-serif; cursor: pointer; background: var(--bg); color: var(--text2); box-shadow: 6px 6px 16px var(--sd), -4px -4px 12px var(--sl); margin-top: 14px; }
-.cta:disabled { opacity: 0.7; cursor: not-allowed; }
-.cta .icon { font-size: 16px; vertical-align: -3px; margin-right: 6px; font-variation-settings: 'FILL' 1, 'wght' 600; }
-.cta.primary:not(:disabled) { background: var(--accent); color: white; }
-.cta.primary:not(:disabled):active { transform: scale(0.97); box-shadow: inset 4px 4px 10px rgba(0,0,0,0.2); }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 4px; }
+.choice button { background: var(--bg); border: none; padding: 16px 14px; border-radius: 18px; font-family: 'Outfit',sans-serif; font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; text-align: left; box-shadow: 5px 5px 14px var(--sd), -4px -4px 12px var(--sl); transition: transform 0.1s, box-shadow 0.1s; line-height: 1.4; }
+.choice button:active { transform: scale(0.97); }
+.choice button.sel { background: var(--accent); color: white; box-shadow: inset 3px 3px 10px rgba(0,0,0,0.2); }
+.choice button .icon { font-size: 18px; vertical-align: -3px; margin-right: 6px; font-variation-settings: 'FILL' 1, 'wght' 600; opacity: 0.9; }
+.choice.cols-1 { grid-template-columns: 1fr; }
 
-.foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 26px; font-weight: 700; letter-spacing: 0.08em; }
+.field-label { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: var(--text2); text-transform: uppercase; margin: 18px 4px 2px; display: block; }
+.field-hint { font-size: 11px; color: var(--text3); font-weight: 600; margin: 2px 4px 0; }
+
+.user-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(42,140,58,0.08); border-radius: 14px; margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--accent); }
+.user-row .icon { font-size: 18px; font-variation-settings: 'FILL' 1, 'wght' 600; }
+.user-row .email { color: var(--text); font-weight: 600; word-break: break-all; flex: 1; }
+.signout { background: none; border: none; color: var(--text3); font-size: 11px; font-weight: 700; cursor: pointer; padding: 4px 6px; font-family: 'Outfit',sans-serif; }
+.signout:active { color: var(--text2); }
+
+.summary { font-size: 13px; line-height: 2; }
+.summary .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(66,69,94,0.08); }
+.summary .row:last-child { border-bottom: none; }
+.summary .k { color: var(--text2); font-weight: 700; }
+.summary .v { font-weight: 700; }
+
+.notice { background: rgba(217,119,6,0.12); color: var(--warn); border-radius: 14px; padding: 12px 14px; font-size: 12px; font-weight: 700; margin: 14px 0; display: flex; align-items: flex-start; gap: 10px; line-height: 1.6; }
+.notice .icon { font-size: 18px; flex-shrink: 0; font-variation-settings: 'FILL' 1, 'wght' 600; }
+.notice code { background: rgba(0,0,0,0.05); padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+
+.err-msg { color: var(--err); font-size: 12px; font-weight: 700; margin-top: 12px; word-break: break-all; line-height: 1.5; }
+
+.foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 30px; font-weight: 700; letter-spacing: 0.08em; }
+
+.diag { font-size: 10px; color: var(--text3); font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-all; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.4); margin-top: 12px; line-height: 1.5; max-height: 160px; overflow: auto; cursor: pointer; }
+.diag:empty { display: none; }
 </style>
 </head>
 <body>
 
 <div class="top">
-  <button class="back" onclick="location.href='/'">← 戻る</button>
-  <div class="title-bar">Setup Wizard</div>
+  <button class="back" onclick="goBack()">← 戻る</button>
+  <div class="title-bar">SETUP WIZARD</div>
   <div class="spacer"></div>
 </div>
 
 <div class="wrap">
-  <div class="hero">
-    <span class="hero-icon">rocket_launch</span>
-    <div class="hero-title">自分の GCP で claude-studio を立ち上げる</div>
-    <div class="hero-sub">
-      あなたの Google アカウントで GCP プロジェクトを 1 つ用意するだけ。<br>
-      Wizard が自動で全部セットアップして、5 分で「自分のミニアプリ基盤」が立ち上がります。
+
+  <div class="progress" id="progress"></div>
+
+  <!-- ───── Step 1: Welcome ───── -->
+  <section class="card" data-step="welcome">
+    <span class="card-icon">rocket_launch</span>
+    <div class="card-title">自分の GCP で立ち上げる</div>
+    <div class="card-sub">
+      Google ログイン → GitHub 連携 → かんたんな質問に回答。<br>
+      あとは裏で全部やります。
     </div>
-  </div>
+    <button class="cta primary" onclick="next()">
+      <span class="icon">arrow_forward</span>
+      始める
+    </button>
+  </section>
 
-  <div class="notice">
-    <span class="icon">construction</span>
-    <div>
-      <b>実装中</b>
-      下のステップは設計図。実際の自動セットアップはまだ動きません。
-      今は <code>platform/infra/bootstrap.sh</code> を Cloud Shell で手動実行する方法しかありません。
+  <!-- ───── Step 2: Google sign-in ───── -->
+  <section class="card" data-step="google" hidden>
+    <div class="eyebrow">STEP 1 / 4</div>
+    <span class="card-icon">login</span>
+    <div class="card-title">Google アカウント</div>
+    <div class="card-sub">
+      普段使っている Google アカウントでサインインします。<br>
+      GCP プロジェクト操作の同意は次のフェーズで取得します。
     </div>
-  </div>
+    <div id="googleUser" style="display:none;">
+      <div class="user-row">
+        <span class="icon">check_circle</span>
+        <span class="email" id="googleEmail"></span>
+        <button class="signout" onclick="signOutGoogle()">解除</button>
+      </div>
+      <button class="cta primary" onclick="next()">
+        <span class="icon">arrow_forward</span>
+        次へ
+      </button>
+    </div>
+    <div id="googleSignin">
+      <button class="cta primary" id="googleSigninBtn" onclick="signInGoogle()">
+        <span class="icon">login</span>
+        Google で続行
+      </button>
+      <div class="err-msg" id="googleErr"></div>
+      <div class="diag" id="googleDiag" title="タップで全文コピー"></div>
+    </div>
+  </section>
 
-  <div class="section-title">Wizard がやってくれる予定の流れ</div>
+  <!-- ───── Step 3: GitHub link ───── -->
+  <section class="card" data-step="github" hidden>
+    <div class="eyebrow">STEP 2 / 4</div>
+    <span class="card-icon" style="color:#24292f;">code</span>
+    <div class="card-title">GitHub と連携</div>
+    <div class="card-sub">
+      テンプレリポジトリをあなたの GitHub に fork して、Cloud Build と接続します。
+    </div>
+    <div class="notice">
+      <span class="icon">construction</span>
+      <div>
+        <b>GitHub OAuth 実装中</b>。今は GitHub ユーザー名だけ手入力で先に進めます (後で正式連携に置き換わります)。
+      </div>
+    </div>
+    <label class="field-label">GitHub ユーザー名 (任意)</label>
+    <input id="ghUser" placeholder="例: konishi0221" style="width:100%; margin-top:6px; padding:14px 16px; border-radius:14px; border:none; background:var(--bg); box-shadow: inset 3px 3px 8px var(--sd), inset -2px -2px 6px var(--sl); font-family:'Outfit',sans-serif; font-size:14px; color:var(--text);" />
+    <div class="field-hint">後で連携できれば空欄で OK</div>
+    <button class="cta primary" onclick="next()">
+      <span class="icon">arrow_forward</span>
+      次へ
+    </button>
+  </section>
 
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-title">Google アカウントでサインイン</div>
-      <div class="step-desc">GCP プロジェクトを操作する権限をリクエスト (cloud-platform / billing スコープ)</div>
+  <!-- ───── Step 4: Questionnaire ───── -->
+  <section class="card" data-step="quiz" hidden>
+    <div class="eyebrow">STEP 3 / 4</div>
+    <span class="card-icon">quiz</span>
+    <div class="card-title">あなたの状況を教えてください</div>
+    <div class="card-sub">
+      この回答が AI ヘルプと Claude Code の振る舞いに反映されます。
     </div>
 
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-title">GCP プロジェクトを選ぶ / 作る</div>
-      <div class="step-desc">既存プロジェクト + 請求アカウントを選択、または新規作成</div>
+    <label class="field-label">スキルレベル</label>
+    <div class="choice" data-q="skill">
+      <button data-v="beginner"><span class="icon">school</span>初心者 (コード初めて)</button>
+      <button data-v="some">少し触ったことある</button>
+      <button data-v="intermediate">中級 (普段書く)</button>
+      <button data-v="advanced">上級 (チームで開発)</button>
     </div>
 
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-title">セットアップ情報を入力</div>
-      <div class="step-desc">プロジェクト名・リージョン (デフォルト asia-northeast1)・最初に欲しいアプリの種類</div>
+    <label class="field-label">最初に作りたいもの</label>
+    <div class="choice" data-q="goal">
+      <button data-v="keihi"><span class="icon">receipt_long</span>経費管理</button>
+      <button data-v="invoice"><span class="icon">request_quote</span>請求書</button>
+      <button data-v="crm"><span class="icon">groups</span>顧客管理</button>
+      <button data-v="meeting"><span class="icon">forum</span>会議録</button>
+      <button data-v="custom"><span class="icon">edit_note</span>独自業務アプリ</button>
+      <button data-v="hobby"><span class="icon">interests</span>趣味 / 個人用</button>
     </div>
 
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-title">GitHub リポを準備</div>
-      <div class="step-desc">テンプレを fork、Cloud Build と GitHub を 1 タップ接続</div>
-      <div class="step-meta">⚠️ GitHub OAuth はブラウザでの手動承認が必要</div>
+    <label class="field-label">業界 / 用途</label>
+    <div class="choice" data-q="industry">
+      <button data-v="freelance">個人事業主</button>
+      <button data-v="construction">建設</button>
+      <button data-v="retail">小売</button>
+      <button data-v="shigyo">士業</button>
+      <button data-v="it">IT</button>
+      <button data-v="other">その他</button>
     </div>
 
-    <div class="step">
-      <div class="step-num">5</div>
-      <div class="step-title">バックエンドで自動プロビジョン</div>
-      <div class="step-desc">APIs 有効化・Cloud SQL・Storage・SA・Secret Manager・Firebase Auth・Hosting site・Cloud Build トリガを順に作成</div>
-      <div class="step-meta">所要 3-5 分、回線切れても進む (Cloud Tasks chain)</div>
+    <label class="field-label">チームサイズ</label>
+    <div class="choice" data-q="team">
+      <button data-v="solo">個人</button>
+      <button data-v="2-5">2〜5 人</button>
+      <button data-v="6-20">6〜20 人</button>
+      <button data-v="21+">21 人以上</button>
     </div>
 
-    <div class="step">
-      <div class="step-num">6</div>
-      <div class="step-title">完了 → 自分の URL がもらえる</div>
-      <div class="step-desc">https://&lt;your-project&gt;.web.app で自分のミニアプリ基盤が稼働開始</div>
+    <button class="cta primary" id="quizNext" disabled onclick="next()">
+      <span class="icon">arrow_forward</span>
+      次へ
+    </button>
+  </section>
+
+  <!-- ───── Step 5: Confirm ───── -->
+  <section class="card" data-step="confirm" hidden>
+    <div class="eyebrow">STEP 4 / 4</div>
+    <span class="card-icon">task_alt</span>
+    <div class="card-title">確認</div>
+    <div class="card-sub">この内容でセットアップを開始します。</div>
+    <div class="summary" id="summary"></div>
+    <button class="cta primary" onclick="submit()">
+      <span class="icon">rocket_launch</span>
+      セットアップ開始
+    </button>
+  </section>
+
+  <!-- ───── Step 6: Done (stub) ───── -->
+  <section class="card" data-step="done" hidden>
+    <span class="card-icon" style="color:var(--warn);">construction</span>
+    <div class="card-title">バックエンド実装中</div>
+    <div class="card-sub">
+      ここまでの入力は保存されました。<br>
+      自動プロビジョン (GCP API 有効化・Cloud SQL・Cloud Build トリガ作成等) のバックエンドは段階的に実装中です。
     </div>
-  </div>
+    <div class="notice">
+      <span class="icon">info</span>
+      <div>
+        <b>今すぐ立ち上げたい方</b><br>
+        当面は <code>platform/infra/bootstrap.sh</code> を Cloud Shell で手動実行する手順を案内します。詳細は <a href="/help/" style="color:var(--warn); font-weight:800;">AI ヘルプ</a> へ。
+      </div>
+    </div>
+    <div class="summary" id="summary2" style="margin-top:14px;"></div>
+    <button class="cta" onclick="location.href='/'">
+      <span class="icon">home</span>
+      トップに戻る
+    </button>
+    <button class="cta" onclick="location.href='/help/'">
+      <span class="icon">support_agent</span>
+      AI ヘルプで相談する
+    </button>
+  </section>
 
-  <button class="cta primary" disabled>
-    <span class="icon">login</span>
-    Google アカウントで始める (実装中)
-  </button>
-
-  <button class="cta" onclick="location.href='/help/'">
-    <span class="icon">support_agent</span>
-    分からないことは AI ヘルプに聞く
-  </button>
-
-  <div class="foot">CLAUDE-STUDIO SETUP WIZARD · v0 (SCAFFOLD)</div>
+  <div class="foot">CLAUDE-STUDIO WIZARD · v0 (α)</div>
 </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  getRedirectResult, setPersistence, browserLocalPersistence,
+  onAuthStateChanged, signOut,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+// ───────── 状態 ─────────
+// localStorage に永続化。リロード・別タブでも復元できる。
+const STORAGE_KEY = "wizard_state_v1";
+const STEPS = ["welcome", "google", "github", "quiz", "confirm", "done"];
+let state = loadState();
+let fbAuth = null;
+let signinInProgress = false;
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    return Object.assign({ step: "welcome", quiz: {}, ghUser: "" }, s);
+  } catch { return { step: "welcome", quiz: {}, ghUser: "" }; }
+}
+function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+// ───────── 画面遷移 ─────────
+window.next = () => {
+  const i = STEPS.indexOf(state.step);
+  if (i < STEPS.length - 1) {
+    state.step = STEPS[i + 1];
+    saveState();
+    render();
+  }
+};
+window.goBack = () => {
+  const i = STEPS.indexOf(state.step);
+  if (i > 0) {
+    state.step = STEPS[i - 1];
+    saveState();
+    render();
+  } else {
+    location.href = "/";
+  }
+};
+
+function render() {
+  for (const s of STEPS) {
+    document.querySelector(`[data-step="${s}"]`).hidden = (state.step !== s);
+  }
+  // progress dots
+  const prog = document.getElementById("progress");
+  prog.innerHTML = "";
+  // welcome と done を除いた 4 ステップ分
+  const work = ["google", "github", "quiz", "confirm"];
+  if (work.includes(state.step)) {
+    const cur = work.indexOf(state.step);
+    for (let i = 0; i < work.length; i++) {
+      const d = document.createElement("div");
+      d.className = "dot" + (i <= cur ? " on" : "");
+      prog.appendChild(d);
+    }
+  }
+  // restore google user display
+  if (state.googleEmail) showGoogleUser(state.googleEmail);
+  // restore github user
+  const ghInput = document.getElementById("ghUser");
+  if (ghInput && state.ghUser) ghInput.value = state.ghUser;
+  // restore quiz selections
+  document.querySelectorAll("[data-q]").forEach(group => {
+    const q = group.dataset.q;
+    group.querySelectorAll("button").forEach(b => {
+      b.classList.toggle("sel", state.quiz[q] === b.dataset.v);
+    });
+  });
+  updateQuizNext();
+  // confirm summary
+  if (state.step === "confirm" || state.step === "done") {
+    const target = state.step === "confirm" ? "summary" : "summary2";
+    renderSummary(target);
+  }
+}
+
+function renderSummary(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const rows = [
+    ["Google", state.googleEmail || "(未サインイン)"],
+    ["GitHub", state.ghUser || "(未入力)"],
+    ["スキルレベル", labelOf("skill", state.quiz.skill)],
+    ["作りたいもの", labelOf("goal", state.quiz.goal)],
+    ["業界 / 用途", labelOf("industry", state.quiz.industry)],
+    ["チームサイズ", labelOf("team", state.quiz.team)],
+  ];
+  el.innerHTML = rows.map(([k, v]) =>
+    `<div class="row"><span class="k">${k}</span><span class="v">${escapeHtml(v || "—")}</span></div>`
+  ).join("");
+}
+
+function labelOf(q, v) {
+  if (!v) return "";
+  const btn = document.querySelector(`[data-q="${q}"] [data-v="${v}"]`);
+  if (!btn) return v;
+  const txt = Array.from(btn.childNodes)
+    .filter(n => !(n.nodeType === 1 && n.classList?.contains("icon")))
+    .map(n => n.textContent)
+    .join("")
+    .trim();
+  return txt || v;
+}
+
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// ───────── Google sign-in ─────────
+function diagLog(msg) {
+  const arr = JSON.parse(sessionStorage.getItem("wizardLog") || "[]");
+  arr.push(`[${new Date().toISOString().slice(11,19)}] ${msg}`);
+  if (arr.length > 30) arr.shift();
+  sessionStorage.setItem("wizardLog", JSON.stringify(arr));
+  const el = document.getElementById("googleDiag");
+  if (el) el.textContent = arr.join("\n");
+}
+document.getElementById("googleDiag")?.addEventListener("click", () => {
+  navigator.clipboard?.writeText(document.getElementById("googleDiag").textContent || "");
+});
+
+function showGoogleUser(email) {
+  document.getElementById("googleEmail").textContent = email;
+  document.getElementById("googleUser").style.display = "block";
+  document.getElementById("googleSignin").style.display = "none";
+}
+
+window.signInGoogle = async () => {
+  if (signinInProgress || !fbAuth) return;
+  signinInProgress = true;
+  const errEl = document.getElementById("googleErr");
+  errEl.textContent = "";
+  diagLog("click signin");
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+    if (isMobile) {
+      diagLog("→ signInWithRedirect");
+      await signInWithRedirect(fbAuth, provider);
+    } else {
+      diagLog("→ signInWithPopup");
+      const res = await signInWithPopup(fbAuth, provider);
+      onAuthed(res.user);
+    }
+  } catch (e) {
+    diagLog(`ERR ${e.code || ""} ${e.message}`);
+    errEl.textContent = (e.code || "") + " " + e.message;
+    signinInProgress = false;
+  }
+};
+
+window.signOutGoogle = async () => {
+  if (fbAuth) await signOut(fbAuth);
+  state.googleEmail = "";
+  saveState();
+  document.getElementById("googleUser").style.display = "none";
+  document.getElementById("googleSignin").style.display = "block";
+};
+
+function onAuthed(user) {
+  if (!user?.email) return;
+  state.googleEmail = user.email;
+  saveState();
+  showGoogleUser(user.email);
+  signinInProgress = false;
+}
+
+// ───────── Questionnaire ─────────
+document.querySelectorAll("[data-q] button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const q = btn.closest("[data-q]").dataset.q;
+    state.quiz[q] = btn.dataset.v;
+    saveState();
+    btn.closest("[data-q]").querySelectorAll("button").forEach(b => b.classList.toggle("sel", b === btn));
+    updateQuizNext();
+  });
+});
+
+function updateQuizNext() {
+  const need = ["skill", "goal", "industry", "team"];
+  const ok = need.every(k => state.quiz[k]);
+  const btn = document.getElementById("quizNext");
+  if (btn) btn.disabled = !ok;
+}
+
+// ───────── GitHub user input ─────────
+document.getElementById("ghUser")?.addEventListener("input", (e) => {
+  state.ghUser = e.target.value.trim();
+  saveState();
+});
+
+// ───────── Submit (stub) ─────────
+window.submit = () => {
+  // 本来はここでバックエンド (Cloud Run worker) に POST して
+  // Cloud Tasks chain で GCP プロビジョンを開始する。
+  // 現状はバックエンド未実装なので、状態保存だけして done ステップへ。
+  state.submittedAt = new Date().toISOString();
+  saveState();
+  state.step = "done";
+  saveState();
+  render();
+};
+
+// ───────── Init Firebase ─────────
+(async function init() {
+  try {
+    const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
+    cfg.authDomain = location.hostname; // iOS Safari ITP 対策
+    fbAuth = getAuth(initializeApp(cfg));
+    await setPersistence(fbAuth, browserLocalPersistence);
+    diagLog(`init project=${cfg.projectId}`);
+    try {
+      const rr = await getRedirectResult(fbAuth);
+      diagLog(`redirectResult=${rr ? rr.user.email : "null"}`);
+      if (rr?.user) onAuthed(rr.user);
+    } catch (e) {
+      diagLog(`redirectResult ERR ${e.code || ""} ${e.message}`);
+    }
+    onAuthStateChanged(fbAuth, (user) => {
+      if (user) onAuthed(user);
+    });
+  } catch (e) {
+    diagLog(`init ERR ${e.message}`);
+    const errEl = document.getElementById("googleErr");
+    if (errEl) errEl.textContent = "init失敗: " + e.message;
+  }
+  render();
+})();
+</script>
 
 </body>
 </html>

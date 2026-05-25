@@ -1,29 +1,37 @@
 # claude-studio platform
 
-Claude Code で個人・小規模チーム向けのミニアプリを次々作るための GCP プラットフォーム本体。
-`apps/<アプリID>/` を 1 ディレクトリ追加するだけで新しいアプリが立ち上がる。
+claude-studio の **運営側 Web 本体**。
+エンドユーザーが自分の GCP にミニアプリ基盤を立ち上げるための **LP + Setup Wizard** を提供する。
 
-`main` に push すれば Cloud Build トリガで自動デプロイ → `https://code-studio-497311-app.web.app` で公開。
+**🌐 本番 URL**: https://code-studio-497311-app.web.app
 
-> このディレクトリ (`platform/`) は claude-studio の運営側 Web 本体。
-> 将来 wizard が各ユーザーの GCP に展開する「ユーザー向けテンプレ」は `template/` (リポ root の兄弟ディレクトリ、未着手)。
-> 両者は同じ launcher / Cloud Run / Cloud SQL 構成を共有する設計だが、デプロイ先 GCP プロジェクトが別。
+`main` に push すれば Cloud Build トリガで自動デプロイ → 上記 URL で公開。
+
+> ⚠ **重要な役割分担**
+> - **このリポ (`platform/`)** = 運営側。LP・wizard・(開発中の) ヘルプチャットだけ載ってる。
+> - **エンドユーザー向けミニアプリ群** = **別リポジトリ** (テンプレ repo、未着手) に置く。wizard が clone してユーザーの GCP にデプロイする。
+> - 今このリポの `apps/help/` 等は最終的に別リポへ移動予定。**それまでの開発デバッグ用**として `apps/debug/` 配下からアクセスできる。
 
 ---
 
-## 🛠 このプロジェクトについて
+## 📁 ルーティング (Hosting)
 
-あなたの業務・趣味に役立つミニアプリをスマホで使えるようにする個人サンドボックス。`apps/help/` の AI ヘルプチャットを最初の起点として、必要なアプリを自分で増やしていきます。
+| URL | ディレクトリ | 役割 | 認証 |
+|---|---|---|---|
+| `/` | `apps/index.html` | **LP** (プロダクト説明 + CTA) | 不要 |
+| `/wizard/` | `apps/wizard/index.html` | **Setup Wizard** (Google ログイン + GitHub + アンケート + 確認) | wizard 内で Google サインイン |
+| `/debug/` | `apps/debug/index.html` | **内部ランチャー** (旧 `apps/index.html`)。help 等の開発用 | Firebase Auth (Google) |
+| `/help/` | `apps/help/index.html` | AI ヘルプチャット (このシステムを知ってる Gemini)。debug 配下扱い | Firebase Auth |
 
-インフラ・GCP 設定・デプロイ周りは、最初に `infra/bootstrap.sh` を実行したオーナー (あなた) が管理。
+未認証で `/help/` に直接アクセス → `/debug/?next=/help/` に飛んでサインイン → 戻る。
 
 ---
 
 ## 🤖 Claude Code への依頼の定型句
 
-新しいミニアプリや修正を Claude Code に依頼するときは、最初に以下を伝える：
+新しい機能や修正を Claude Code に依頼するときは、最初に以下を伝える：
 
-> **`README.md` と `DEPLOY.md` と `CLAUDE.md` を読んでから、〇〇を作って**
+> **`README.md` と `DEPLOY.md` と `CLAUDE.md` を読んでから、〇〇をやって**
 
 これで Claude Code がプロジェクト構成・デプロイ方法・コード規約を全部把握してから書いてくれる。
 
@@ -43,121 +51,50 @@ git pull --ff-only origin main
 
 ---
 
-## 📁 ミニアプリ構造 (ランチャー方式)
+## 📁 ディレクトリ構成
 
 ```
-apps/                          ← Hosting 公開ルート
-├── index.html                 ← ランチャー (アプリ選択 + 共通 Google ログイン) → /
-├── config.js                  ← Cloud Run URL (ビルド時に自動注入)
-├── help/                      ← AI ヘルプチャット → /help/
-│   ├── index.html
-│   ├── README.md
-│   ├── server/                ← Cloud Run コード
-│   ├── infra/                 ← schema.sql 等 (Hosting 配信から除外)
-│   └── cloudbuild.yaml
-└── <新アプリID>/
-    ├── index.html
-    └── README.md
-```
-
-### 新しいミニアプリの追加手順
-
-1. `apps/<id>/index.html` と `apps/<id>/README.md` を作る (**1 アプリ＝1 ディレクトリ**)
-2. ランチャー `apps/index.html` の `APPS` 配列に 1 行追加
-3. main に push → 自動デプロイ → `https://code-studio-497311-app.web.app/<id>/` で公開
-
-### ルール
-
-- **共通ログイン**: ランチャーで Google ログイン → `localStorage` 永続化で全ミニアプリ共有
-- **静的のみのアプリ**: `apps/<id>/index.html` 1 ファイルだけで完結
-- **バックエンドが要るアプリ**: 専用 Cloud Run サービスを持てる (例: `help-api`)。サーバコードは `apps/<id>/server/` 配下に
-
----
-
-## 💻 ミニアプリ実装レシピ
-
-### A. 認証も API も要らないアプリ
-
-`apps/<id>/index.html` を 1 ファイル書くだけ。
-
-```html
-<!DOCTYPE html>
-<html lang="ja">
-<head><meta charset="UTF-8"><title>マイアプリ</title></head>
-<body>
-  <h1>こんにちは</h1>
-  <button onclick="alert('クリックされた')">ボタン</button>
-</body>
-</html>
-```
-
-最後にランチャー (`apps/index.html`) の `APPS` 配列に 1 行追加：
-
-```js
-{ id: "myapp", name: "マイアプリ", icon: "🎯", desc: "説明", path: "/myapp/" },
-```
-
-### B. ログインしてるユーザーのメールを取りたい
-
-ランチャーで Firebase Auth が共通ログイン済み (localStorage 共有)。各ミニアプリでは取得し直し：
-
-```html
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-
-const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
-cfg.authDomain = location.hostname;   // iOS Safari ITP 対策 (必須)
-const auth = getAuth(initializeApp(cfg));
-
-onAuthStateChanged(auth, (user) => {
-  if (!user) { location.href = "/"; return; }
-  document.body.textContent = "こんにちは " + user.email;
-});
-</script>
-```
-
-### C. バックエンド (Cloud Run) を認証付きで叩きたい
-
-`<script src="/config.js"></script>` で `window.API_BASE_<APP_UPPERCASE>` が読まれる (Cloud Build が注入)。
-Firebase ID トークンを Bearer ヘッダにつけて fetch。
-
-```html
-<script src="/config.js"></script>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-
-const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
-cfg.authDomain = location.hostname;
-const auth = getAuth(initializeApp(cfg));
-
-onAuthStateChanged(auth, async (user) => {
-  if (!user) { location.href = "/"; return; }
-  const token = await user.getIdToken();
-  const res = await fetch(window.API_BASE_MYAPP + "/api/something", {
-    headers: { Authorization: "Bearer " + token }
-  });
-  console.log(await res.json());
-});
-</script>
+platform/
+├── apps/                        ← Hosting 公開ルート
+│   ├── index.html               ← LP (エンドユーザー向け)
+│   ├── config.js                ← Cloud Run URL (ビルド時に自動注入)
+│   ├── wizard/                  ← Setup Wizard → /wizard/
+│   │   ├── index.html
+│   │   └── README.md
+│   ├── debug/                   ← 内部ランチャー → /debug/
+│   │   ├── index.html
+│   │   └── README.md
+│   └── help/                    ← AI ヘルプチャット → /help/ (デバッグ用、別リポへ移動予定)
+│       ├── index.html
+│       ├── README.md
+│       ├── server/              ← Cloud Run コード
+│       ├── app.yaml             ← bootstrap.sh が読むメタデータ
+│       └── cloudbuild.yaml      ← Cloud Build 定義
+├── infra/
+│   ├── bootstrap.sh             ← GCP リソース一括プロビジョン
+│   ├── db.sh                    ← psql ラッパー
+│   └── deploy-hosting.sh        ← 手動 Hosting deploy ラッパー
+├── firebase.json
+├── CLAUDE.md
+├── DEPLOY.md
+└── README.md                    ← これ
 ```
 
 ---
 
-## 🧰 使える GCP サービス (bootstrap 完了後)
+## 🧰 使ってる GCP サービス
 
-| サービス | 用途 (例え話) | 状態 |
-|---|---|---|
-| **Firebase Auth** | 入口の受付係 (誰が来たか確認) | ✅ |
-| **Firebase Hosting** | お店の看板・店内 (静的ファイル配信) | ✅ |
-| **Cloud Run** | お店の厨房 (サーバ側プログラム実行) | ✅ |
-| **Cloud SQL (Postgres)** | 帳簿棚 (行と列で整理されたデータ) | ✅ |
-| **Cloud Storage** | 倉庫 (ファイル・画像保存) | ✅ |
-| **Gemini API** | 文章を読んだり画像を見たりする AI | ✅ |
-| **Secret Manager** | 金庫 (API キー等の保管) | ✅ |
-| **Cloud Build** | 工場 (コードからデプロイ) | ✅ |
-| **Artifact Registry** | 倉庫 (ビルド済みコンテナ) | ✅ |
+| サービス | 用途 (例え話) |
+|---|---|
+| **Firebase Auth** | 入口の受付係 (誰が来たか確認) |
+| **Firebase Hosting** | お店の看板・店内 (静的ファイル配信) |
+| **Cloud Run** | お店の厨房 (サーバ側プログラム実行) |
+| **Cloud SQL (Postgres)** | 帳簿棚 (行と列で整理されたデータ) — 現状未使用 |
+| **Cloud Storage** | 倉庫 (ファイル・画像保存) — 現状未使用 |
+| **Gemini API** | 文章を読んだり画像を見たりする AI (help が利用) |
+| **Secret Manager** | 金庫 (API キー等の保管) |
+| **Cloud Build** | 工場 (コードからデプロイ) |
+| **Artifact Registry** | 倉庫 (ビルド済みコンテナ) |
 
 ---
 
@@ -168,25 +105,39 @@ onAuthStateChanged(auth, async (user) => {
 ### 仕組み
 
 ```
-コード修正 → main に push → Cloud Build トリガ発火 → Docker build → Cloud Run 反映 → Hosting 反映
-                                                                ↓
-                                            ユーザーは https://code-studio-497311-app.web.app を開くだけ
+コード修正 → main に push → Cloud Build トリガ発火 → (Docker build → Cloud Run) → Hosting 反映
+                                                                              ↓
+                                          ユーザーは https://code-studio-497311-app.web.app を開くだけ
 ```
 
 main への push が Cloud Build をキックして本番デプロイされる。**`firebase deploy` を直接叩くのは禁止** (古い clone から打つと本番を巻き戻すため)。手動 deploy は `bash infra/deploy-hosting.sh` 経由。
 
+### トリガの発火条件
+
+現状 Cloud Build トリガは `help-api-deploy` 1 本で、help/cloudbuild.yaml を走らせる。
+このビルドは Cloud Run (help-api) と **Hosting (apps/ 全体)** の両方をデプロイするので、LP / wizard / debug の更新もこのトリガで配信される。
+
+発火条件 = `apps/help/**`, `CLAUDE.md`, `README.md`, `DEPLOY.md`, `apps/index.html`, `apps/config.js`, `apps/wizard/**`, `apps/debug/**` のいずれか変更時。
+(`apps/help/app.yaml` の `EXTRA_TRIGGER_FILES` で管理。変更したらオーナー側で `bash platform/infra/bootstrap.sh` 再実行 or Cloud Console でトリガ更新が必要)
+
 ---
 
-## 📦 現在のアプリ
+## 📦 現在のアプリ (このリポ内)
 
-| ディレクトリ | サービス名 | 内容 | 状態 |
-|---|---|---|---|
-| `apps/help/` | `help-api` | AI ヘルプチャット (このシステムを知ってる Gemini) | 稼働中 ✅ |
+| ディレクトリ | 役割 | 状態 |
+|---|---|---|
+| `apps/` (`/`) | LP | ✅ |
+| `apps/wizard/` (`/wizard/`) | Setup Wizard | α (UI 動く、バックエンド未実装) |
+| `apps/debug/` (`/debug/`) | 内部ランチャー | ✅ |
+| `apps/help/` (`/help/`) | AI ヘルプチャット (Gemini) | ✅ (デバッグ用、最終的に別リポへ) |
 
 ---
 
 ## 🔗 詳細ドキュメント
 
-- [CLAUDE.md](CLAUDE.md) — Claude Code 用ルール (`git fetch` 義務・push 手順・触っちゃダメリスト等)
+- [CLAUDE.md](CLAUDE.md) — Claude Code 用ルール
 - [DEPLOY.md](DEPLOY.md) — デプロイ構造の完全ドキュメント
+- [apps/wizard/README.md](apps/wizard/README.md) — Wizard 設計と残課題
+- [apps/debug/README.md](apps/debug/README.md) — 内部ランチャーの位置づけ
 - [apps/help/README.md](apps/help/README.md) — AI ヘルプの使い方
+- [../docs/saas-draft-v1.md](../docs/saas-draft-v1.md) — SaaS 全体設計 (一次資料)

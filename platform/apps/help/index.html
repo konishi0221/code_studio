@@ -219,8 +219,8 @@ $input.addEventListener("keydown", (e) => {
   fbAuth = getAuth(initializeApp(cfg));
   onAuthStateChanged(fbAuth, (user) => {
     if (!user) {
-      // ランチャーに飛ばす、戻り先付き
-      location.href = "/?next=" + encodeURIComponent(location.pathname);
+      // help は debug 配下扱い。未ログインなら debug ランチャー経由でサインインさせて戻す。
+      location.href = "/debug/?next=" + encodeURIComponent(location.pathname);
       return;
     }
     currentUser = user;

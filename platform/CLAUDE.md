@@ -172,17 +172,23 @@ Claude Code は **絶対に `firebase deploy` を直接実行しない**。
 
 ## 5. 触っちゃダメなものリマインダー
 
+> ⚠️ このリポは **claude-studio 運営本体 (platform/)**。
+> エンドユーザー向けミニアプリは将来 **別リポジトリ** に置く想定。
+> このリポ内ではほぼ全部「オーナー領域」と考えてよい。
+
 ユーザーは触っちゃダメ。**オーナーモードでのみ編集可**：
 
 - `DEPLOY.md` / `CLAUDE.md` (このファイル)
 - `infra/` 配下全部
-- `apps/<app>/cloudbuild.yaml`
+- `apps/<app>/cloudbuild.yaml` / `apps/<app>/app.yaml`
 - ルートの `firebase.json`
-- ランチャー `apps/index.html` の**スタイル・ロジック・他人のエントリ**
+- **LP** `apps/index.html` (エンドユーザーが最初に見るページ)
+- **Wizard** `apps/wizard/` 配下 (セットアップフロー本体)
+- **内部ランチャー** `apps/debug/index.html` の**スタイル・ロジック・他人のエントリ**
 
-### ユーザーも編集できるもの
-- `apps/<自分のID>/` 配下すべて
-- ランチャー `apps/index.html` の **APPS 配列に自分のアプリの行を 1 つ追加**
+### ユーザーも編集できるもの (=デバッグ用ミニアプリの作者)
+- `apps/<自分のID>/` 配下すべて (`apps/help/` 等)
+- 内部ランチャー `apps/debug/index.html` の **APPS 配列に自分のアプリの行を 1 つ追加**
 
 ### 新ミニアプリ作成時は README.md も必ず置く
 

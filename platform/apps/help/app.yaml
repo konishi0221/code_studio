@@ -7,6 +7,9 @@ SA: help-run
 HAS_DB: "false"
 HAS_BUCKET: "false"
 CLOUDBUILD: platform/apps/help/cloudbuild.yaml
-# Rebuild help-api when the system docs change (Gemini's knowledge base).
+# Rebuild help-api when the system docs change (Gemini's knowledge base),
+# or when other static apps under apps/ change — help's cloudbuild deploys
+# the whole apps/ directory to Hosting (deploy-hosting step), so it doubles
+# as the Hosting deploy trigger for the LP, debug launcher and wizard.
 # Paths are relative to the platform/ directory.
-EXTRA_TRIGGER_FILES: CLAUDE.md README.md DEPLOY.md
+EXTRA_TRIGGER_FILES: CLAUDE.md README.md DEPLOY.md apps/index.html apps/config.js apps/wizard/** apps/debug/**

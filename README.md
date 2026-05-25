@@ -15,11 +15,11 @@ claude-studio/
 │   └── migration-to-saas.md
 ├── platform/          ← ⭐ プラットフォーム本体（このリポを main push したら自動デプロイされる Web 本体）
 │   ├── apps/
-│   │   ├── index.html       ← ランチャー
+│   │   ├── index.html       ← LP (エンドユーザー向け)
 │   │   ├── config.js
-│   │   ├── help/            ← AI ヘルプチャット（このシステムを知ってる Gemini）
-│   │   ├── quiz/            ← 教育クイズ（未着手）
-│   │   └── wizard/          ← Setup Wizard（scaffold のみ、ロジック未実装）
+│   │   ├── wizard/          ← Setup Wizard（α: UI 動く、バックエンド未実装）
+│   │   ├── debug/           ← 内部ランチャー (旧 / の中身)
+│   │   └── help/            ← AI ヘルプチャット (デバッグ用、最終的に別リポへ移動)
 │   ├── infra/
 │   │   ├── bootstrap.sh     ← GCP リソース一括プロビジョン
 │   │   ├── db.sh            ← psql ラッパー
