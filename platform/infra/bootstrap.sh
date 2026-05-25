@@ -102,16 +102,25 @@ gcloud artifacts repositories describe "$REPO_NAME" --location="$REGION" >/dev/n
 
 step "Shared Gemini API key (Secret Manager: gemini-api-key)"
 if ! gcloud secrets describe gemini-api-key >/dev/null 2>&1; then
-  echo "  Get one at: https://aistudio.google.com/app/apikey"
-  read -srp "  Gemini API key (input hidden): " GEMINI_KEY; echo
+  if [[ -n "${GEMINI_API_KEY:-}" ]]; then
+    GEMINI_KEY="$GEMINI_API_KEY"
+  else
+    echo "  Get one at: https://aistudio.google.com/app/apikey"
+    read -srp "  Gemini API key (input hidden): " GEMINI_KEY; echo
+  fi
   if [[ -z "$GEMINI_KEY" ]]; then
-    err "Gemini API key is required."
+    err "Gemini API key is required (set GEMINI_API_KEY env or paste at prompt)."
     exit 1
   fi
   printf "%s" "$GEMINI_KEY" | gcloud secrets create gemini-api-key \
     --replication-policy=automatic --data-file=-
 else
-  sub "already exists. To rotate: echo -n <key> | gcloud secrets versions add gemini-api-key --data-file=-"
+  if [[ -n "${GEMINI_API_KEY:-}" ]]; then
+    printf "%s" "$GEMINI_API_KEY" | gcloud secrets versions add gemini-api-key --data-file=-
+    sub "rotated to env-provided value"
+  else
+    sub "already exists. To rotate: echo -n <key> | gcloud secrets versions add gemini-api-key --data-file=-"
+  fi
 fi
 
 step "GitHub OAuth App (for wizard's automatic fork)"

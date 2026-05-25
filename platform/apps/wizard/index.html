@@ -104,6 +104,19 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 .cost-total .ct-value small { font-size: 12px; font-weight: 600; color: var(--text2); margin-left: 4px; }
 .cost-total .ct-detail { font-size: 11px; color: var(--text2); font-weight: 600; margin-top: 6px; line-height: 1.6; }
 
+/* Cloud Shell ハンドオフ */
+.cs-step { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(66,69,94,0.08); }
+.cs-step:last-child { border-bottom: none; }
+.cs-step-num { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; margin-top: 2px; }
+.cs-step-body { flex: 1; min-width: 0; }
+.cs-step-title { font-size: 14px; font-weight: 800; margin-bottom: 8px; }
+.cs-cmd-box { position: relative; background: #1d1f23; color: #d4d7df; border-radius: 12px; padding: 12px 44px 12px 14px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.6; word-break: break-all; white-space: pre-wrap; }
+.cs-copy { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,0.08); border: none; color: #d4d7df; padding: 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; font-family: inherit; }
+.cs-copy:active { transform: scale(0.95); background: rgba(255,255,255,0.16); }
+.cs-copy .icon { font-family: 'Material Symbols Outlined'; font-size: 16px; font-variation-settings: 'FILL' 1, 'wght' 600; }
+.cs-hint { font-size: 11px; color: var(--text2); font-weight: 600; margin-top: 8px; line-height: 1.6; }
+.cs-hint code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 10px; }
+
 .foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 30px; font-weight: 700; letter-spacing: 0.08em; }
 
 /* 詳細ログパネル: ブロックごとにどこで詰まったか確認するための診断 console */
@@ -346,19 +359,66 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
   <!-- ───── Step 6: Done ───── -->
   <section class="card" data-step="done" hidden>
-    <span class="card-icon" id="doneIcon" style="color:var(--accent);">task_alt</span>
-    <div class="card-title" id="doneTitle">受付完了</div>
+    <span class="card-icon" id="doneIcon" style="color:var(--accent);">rocket_launch</span>
+    <div class="card-title" id="doneTitle">あと 2 ステップで完了</div>
     <div class="card-sub" id="doneSub">
-      入力をバックエンドに送信しました。状況を取得しています…
+      Cloud Shell でセットアップスクリプトを実行すれば、GCP プロビジョンが自動で走ります。
     </div>
 
+    <!-- Cloud Shell ハンドオフ ブロック (status=awaiting_cloud_shell 時に表示) -->
+    <div id="cloudShellBlock" hidden>
+      <div class="cs-step">
+        <div class="cs-step-num">1</div>
+        <div class="cs-step-body">
+          <div class="cs-step-title">このコマンドをコピー</div>
+          <div class="cs-cmd-box">
+            <code id="cloudShellCmd">読み込み中…</code>
+            <button class="cs-copy" onclick="copyCloudShellCmd()" title="クリップボードにコピー">
+              <span class="icon">content_copy</span>
+            </button>
+          </div>
+          <div class="cs-hint" id="cloudShellCopied"></div>
+        </div>
+      </div>
+      <div class="cs-step">
+        <div class="cs-step-num">2</div>
+        <div class="cs-step-body">
+          <div class="cs-step-title">Cloud Shell を開いて貼り付け & Enter</div>
+          <a class="cta primary" id="cloudShellOpen" target="_blank" rel="noopener" href="#">
+            <span class="icon">terminal</span>
+            Cloud Shell を開く
+          </a>
+          <div class="cs-hint">新しいタブで開きます。最初に Google ログイン → ターミナルに貼り付け (Cmd/Ctrl + V) → Enter。</div>
+        </div>
+      </div>
+      <div class="cs-hint" style="margin-top:14px;">
+        所要 5〜10 分。途中で <code>PROJECT_ID</code> / <code>GEMINI_API_KEY</code> を聞かれます。
+        トークンは <span id="tokenExpire">24 時間</span>有効。
+      </div>
+    </div>
+
+    <!-- 進捗 (常時表示) -->
     <div id="runStatus" style="margin:18px 0;"></div>
 
+    <!-- 完了時のホスティング URL -->
+    <div id="completedBlock" hidden>
+      <div class="notice" style="background: rgba(42,140,58,0.12); color: var(--accent);">
+        <span class="icon">celebration</span>
+        <div>
+          <b>セットアップ完了 🎉</b><br>
+          あなた専用の URL:
+          <a id="hostingUrl" href="#" target="_blank" rel="noopener" style="color:var(--accent); font-weight:800; word-break:break-all;"></a><br>
+          <small style="font-weight:600;">(Cloud Build の初回ビルド完了までさらに 5〜10 分)</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 失敗時の手動フォールバック案内 -->
     <div class="notice" id="manualNotice" hidden>
       <span class="icon">info</span>
       <div>
-        <b>現状: バックエンドは受付まで実装済</b><br>
-        GCP プロビジョンの自動化は段階的に実装中。当面はオーナー側で <code>infra/bootstrap.sh</code> を手動実行して進めます。詳細や進捗確認は <a href="/help/" style="color:#b85e02; font-weight:800;">AI ヘルプ</a> へ。
+        <b>セットアップが手動待ちになりました</b><br>
+        オーナーに連絡が届きます。詳細や状況確認は <a href="/help/" style="color:#b85e02; font-weight:800;">AI ヘルプ</a> へ。
       </div>
     </div>
 
@@ -1141,8 +1201,8 @@ function renderRunStatus(d, els) {
     <div style="font-size:11px; color:var(--text3); font-weight:700; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">RUN ID: ${escapeHtml(d.id)}</div>
     ${(d.steps || []).map(s => `
       <div style="display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid rgba(66,69,94,0.08); font-size:13px;">
-        <span class="icon" style="font-family:'Material Symbols Outlined'; font-size:18px; color:${s.status === 'done' ? 'var(--accent)' : s.status === 'failed' ? 'var(--err)' : 'var(--text3)'}; font-variation-settings:'FILL' 1,'wght' 600;">
-          ${s.status === 'done' ? 'check_circle' : s.status === 'failed' ? 'error' : 'pending'}
+        <span class="icon" style="font-family:'Material Symbols Outlined'; font-size:18px; color:${s.status === 'done' ? 'var(--accent)' : s.status === 'failed' ? 'var(--err)' : s.status === 'running' ? 'var(--text)' : 'var(--text3)'}; font-variation-settings:'FILL' 1,'wght' 600;">
+          ${s.status === 'done' ? 'check_circle' : s.status === 'failed' ? 'error' : s.status === 'running' ? 'sync' : 'pending'}
         </span>
         <div style="flex:1;">
           <div style="font-weight:700;">${escapeHtml(s.name)}</div>
@@ -1151,30 +1211,116 @@ function renderRunStatus(d, els) {
       </div>
     `).join("")}
   `;
-  if (d.status === "manual_required") {
-    els.titleEl.textContent = "受付完了 (オーナー側で手動セットアップ待ち)";
-    els.subEl.textContent = "入力は保存されました。自動プロビジョンは未実装なので、現状はオーナーが手動でセットアップを進めます。";
-    els.iconEl.style.color = "var(--warn)";
-    els.iconEl.textContent = "schedule";
-    els.noticeEl.hidden = false;
+  const csBlock = document.getElementById("cloudShellBlock");
+  const completedBlock = document.getElementById("completedBlock");
+  const hostingLink = document.getElementById("hostingUrl");
+  // 既定はすべて非表示にしてからステータス別に出す
+  if (csBlock) csBlock.hidden = true;
+  if (completedBlock) completedBlock.hidden = true;
+  if (els.noticeEl) els.noticeEl.hidden = true;
+
+  if (d.status === "awaiting_cloud_shell") {
+    els.titleEl.textContent = "あと 2 ステップで完了";
+    els.subEl.textContent = "Cloud Shell でコマンドを貼り付け & 実行してください。";
+    els.iconEl.style.color = "var(--accent)";
+    els.iconEl.textContent = "rocket_launch";
+    if (csBlock) csBlock.hidden = false;
+    // provision-link をまだ取ってなければ取得
+    if (!provisionLink) ensureProvisionLink();
+  } else if (d.status === "in_progress") {
+    els.titleEl.textContent = "セットアップ進行中";
+    els.subEl.textContent = "Cloud Shell でスクリプトが走ってます。完了まで 3〜10 分。";
+    els.iconEl.style.color = "var(--accent)";
+    els.iconEl.textContent = "sync";
+    if (csBlock) csBlock.hidden = false; // コマンドは引き続き見せる (再実行用)
   } else if (d.status === "completed") {
-    els.titleEl.textContent = "セットアップ完了";
+    els.titleEl.textContent = "セットアップ完了 🎉";
     els.subEl.textContent = "あなた専用の URL が稼働開始しました。";
     els.iconEl.style.color = "var(--accent)";
     els.iconEl.textContent = "task_alt";
-    els.noticeEl.hidden = true;
+    if (completedBlock && d.hosting_url) {
+      completedBlock.hidden = false;
+      if (hostingLink) {
+        hostingLink.href = d.hosting_url;
+        hostingLink.textContent = d.hosting_url;
+      }
+    }
   } else if (d.status === "failed") {
     els.titleEl.textContent = "失敗";
-    els.subEl.textContent = "途中で止まりました。AI ヘルプで状況を確認してください。";
+    els.subEl.textContent = "途中で止まりました。詳細ログ + AI ヘルプで状況を確認してください。";
     els.iconEl.style.color = "var(--err)";
     els.iconEl.textContent = "error";
-    els.noticeEl.hidden = true;
+    if (csBlock) csBlock.hidden = false; // やり直し用にコマンド表示
+  } else if (d.status === "manual_required") {
+    els.titleEl.textContent = "受付完了 (オーナー側で手動セットアップ待ち)";
+    els.subEl.textContent = "自動プロビジョンが利用できないため、オーナー側で対応します。";
+    els.iconEl.style.color = "var(--warn)";
+    els.iconEl.textContent = "schedule";
+    if (els.noticeEl) els.noticeEl.hidden = false;
   } else {
-    els.titleEl.textContent = "セットアップ進行中";
-    els.subEl.textContent = "GCP プロビジョンを実行中…";
-    els.iconEl.textContent = "sync";
+    els.titleEl.textContent = "状態取得中…";
+    els.subEl.textContent = "";
+    els.iconEl.textContent = "hourglass_top";
   }
 }
+
+// ───────── Cloud Shell ハンドオフ (Phase 2) ─────────
+let provisionLink = null;          // { token, command, cloud_shell_url, expires_at }
+let provisionFetching = false;
+
+async function ensureProvisionLink() {
+  if (provisionLink || provisionFetching || !state.runId || !fbAuth?.currentUser) return;
+  provisionFetching = true;
+  const apiBase = window.API_BASE_WIZARD || "";
+  if (!apiBase) return;
+  wizardLog("info", "provision.link_request", `run=${state.runId}`);
+  try {
+    const token = await fbAuth.currentUser.getIdToken();
+    const res = await fetch(apiBase + `/api/wizard/runs/${encodeURIComponent(state.runId)}/provision-link`, {
+      method: "POST",
+      headers: { authorization: "Bearer " + token },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t.slice(0, 200)}`);
+    }
+    provisionLink = await res.json();
+    wizardLog("info", "provision.link_ok", `token=${(provisionLink.token || "").slice(0,6)}... cs_url=${provisionLink.cloud_shell_url.slice(0,60)}...`);
+    renderProvisionLink();
+  } catch (e) {
+    wizardLog("error", "provision.link_failed", e.message);
+    const cmd = document.getElementById("cloudShellCmd");
+    if (cmd) cmd.textContent = "発行失敗: " + e.message;
+  } finally {
+    provisionFetching = false;
+  }
+}
+
+function renderProvisionLink() {
+  if (!provisionLink) return;
+  const cmdEl = document.getElementById("cloudShellCmd");
+  const openEl = document.getElementById("cloudShellOpen");
+  const expEl = document.getElementById("tokenExpire");
+  if (cmdEl) cmdEl.textContent = provisionLink.command;
+  if (openEl) openEl.href = provisionLink.cloud_shell_url;
+  if (expEl && provisionLink.expires_at) {
+    const expMs = new Date(provisionLink.expires_at).getTime();
+    const remainHr = Math.max(0, Math.round((expMs - Date.now()) / (60 * 60 * 1000)));
+    expEl.textContent = `${remainHr} 時間`;
+  }
+}
+
+window.copyCloudShellCmd = () => {
+  if (!provisionLink?.command) return;
+  navigator.clipboard?.writeText(provisionLink.command).then(
+    () => {
+      const hint = document.getElementById("cloudShellCopied");
+      if (hint) { hint.textContent = "✓ コピーしました"; setTimeout(() => { hint.textContent = ""; }, 2500); }
+      wizardLog("info", "provision.cmd_copied");
+    },
+    () => { alert("コピー失敗"); }
+  );
+};
 
 // 予期しないエラーも残す (例: 拡張機能との衝突, 外部 SDK の breaking 変更)
 window.addEventListener("error", (ev) => {

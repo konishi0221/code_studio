@@ -131,7 +131,7 @@ Cloud Build トリガは 2 本:
 | ディレクトリ | サービス | 役割 | 状態 |
 |---|---|---|---|
 | `apps/` (`/`) | — | LP | ✅ |
-| `apps/wizard/` (`/wizard/`) | `wizard-api` (Cloud Run) | Setup Wizard (5 ステップ: Google → GitHub OAuth → アンケート → オプション/月額試算 → 確認) | α (UI + 受付 API + 詳細ログ + コスト試算 + GitHub OAuth 実装済、GCP 自動プロビジョン未実装) |
+| `apps/wizard/` (`/wizard/`) | `wizard-api` (Cloud Run) | Setup Wizard (5 ステップ: Google → GitHub OAuth → アンケート → オプション/月額試算 → 確認 → Cloud Shell ハンドオフ) | β (UI + GitHub OAuth + Cloud Shell deep link + live 進捗実装済。テンプレ自動 fork は Phase 4) |
 | `apps/debug/` (`/debug/`) | — | 内部ランチャー | ✅ |
 | `apps/help/` (`/help/`) | `help-api` (Cloud Run) | AI ヘルプチャット (Gemini) | ✅ (デバッグ用、最終的に別リポへ) |
 

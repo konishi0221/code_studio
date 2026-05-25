@@ -65,6 +65,38 @@
 - フロント: 「GitHub で続行」ボタンの代わりに**ユーザー名手入力 fallback** を表示
 - これで OAuth 設定前でも wizard は動く
 
+## Cloud Shell ハンドオフ (Step 5 完了後)
+
+submit するとフロントが backend に `POST /api/wizard/runs/{id}/provision-link`
+を叩いて以下を取る:
+- `token` (24h 有効、一度発行されたら同じ run の間は冪等)
+- `command` (= `bash platform/infra/wizard-bootstrap.sh <api> <token>`)
+- `cloud_shell_url` (deep link: 当リポを clone + `wizard-bootstrap.sh` を editor で open + `cloudshell-welcome.md` を terminal に print)
+
+done 画面で:
+1. コピー用コードボックスにコマンド (ワンタップで `📋`)
+2. 「Cloud Shell を開く」ボタン (大きい primary CTA)
+3. 進捗カード (polling で live 更新)
+
+### `wizard-bootstrap.sh` の動き
+
+Cloud Shell で実行されると:
+1. `curl ... /api/wizard/by-token/{token}` で survey / options / GitHub login / user_email を取得
+2. `gcloud config get-value project` で PROJECT_ID を拾う、無ければ prompt
+3. 請求アカウント連携の有無を軽く検査 (`gcloud beta billing projects describe`)
+4. `OWNER_EMAIL` / `HOSTING_SITE` / `GITHUB_OWNER` / `GITHUB_REPO` を env に組み立て
+5. `GEMINI_API_KEY` を prompt (env で渡せばスキップ) — 各ユーザーが自前キー
+6. 確認 → `bash bootstrap.sh` 実行 (非対話モード、すべて env で流し込み)
+7. 各 step で `POST .../by-token/{token}/status` を叩いて wizard-api 経由で Firestore 更新 → フロントの polling に反映
+8. 完了時に `status=completed` + `hosting_url` を渡す → done 画面の URL ブロックが点灯
+
+### 認証モデル
+
+- `POST .../provision-link` は Firebase auth 必須 (本人 or owner のみ)
+- `GET .../by-token/:token` と `POST .../by-token/:token/status` は **token がそのまま身分証**。Firebase auth は不要 (Cloud Shell のスクリプトに Firebase 鍵を渡せないため)
+- token は `crypto.randomBytes(24)` の base64url、24 時間 TTL、Firestore に保管
+- token を持ってる人 = その run を見られる + status 更新できる、それだけ
+
 ## オプション + 月額試算 (Step 4)
 
 「いきなり Cloud SQL 立ててお金かかる」が起きないよう、有料サービスは toggle 式で選択。選択に応じて月額が live 計算される。
@@ -182,6 +214,8 @@ bootstrap.sh は既存リソースに対しては冪等。新規追加分 (Fires
 - [x] フロントエンドが実 API を叩いて状態 polling
 - [x] 構造化ログ + 詳細ログパネル + Cloud Logs/Firestore 直リンク
 - [x] GitHub OAuth 正式連携 (Step 2、未設定なら手入力 fallback)
+- [x] Cloud Shell ハンドオフ (provision-link + wizard-bootstrap.sh) ← Phase 2
+- [x] bootstrap.sh 完了コールバック → live 進捗表示 ← Phase 3
 - [ ] Google OAuth `cloud-platform` スコープ取得 (Google App 検証通す)
 - [ ] Cloud Tasks chain で各ステップを非同期実行 (途中失敗からの再開)
 - [ ] 各ステップの実装 (create-project, enable-apis, provision-shared, fork-template, ...)

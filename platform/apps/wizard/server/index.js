@@ -51,13 +51,16 @@ app.get("/health", (req, res) => {
 
 // Firebase ID トークン検証。
 // パブリック (auth 不要) なルートはここでスキップ:
-//   - /api/wizard/config   : フロントが OAuth 利用可否を判定する用
-//   - /api/github/callback : GitHub から戻ってくる redirect (Bearer 無い)
+//   - /api/wizard/config       : フロントが OAuth 利用可否を判定する用
+//   - /api/github/callback     : GitHub から戻ってくる redirect (Bearer 無い)
+//   - /api/wizard/by-token/... : Cloud Shell 側スクリプトが token を身分証として使う
 // req.path は app.use("/api", ...) のマウント先からの相対パスなので /api 抜き。
 const PUBLIC_API_PATHS = new Set(["/wizard/config", "/github/callback"]);
+const PUBLIC_PATH_PREFIXES = ["/wizard/by-token/"];
 
 app.use("/api", async (req, res, next) => {
   if (PUBLIC_API_PATHS.has(req.path)) return next();
+  if (PUBLIC_PATH_PREFIXES.some(p => req.path.startsWith(p))) return next();
   if (DEV) { req.user = { uid: "dev", email: "dev@local" }; return next(); }
   try {
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
@@ -169,15 +172,13 @@ app.post("/api/wizard/submit", async (req, res) => {
     options,
     estimated_monthly_jpy: estimatedMonthlyJpy,
     github_username: ghUser,
-    // 現状ステータス: 自動プロビジョン未実装なので manual_required で止まる。
-    // 将来のステップ追加例:
-    //   received → connecting_github → creating_gcp_project → enabling_apis →
-    //   provisioning_resources → forking_repo → first_deploy → completed
-    status: "manual_required",
+    // ステータス: ユーザーが Cloud Shell でハンドオフ実行するまで待機。
+    //   awaiting_cloud_shell → in_progress → completed (or failed)
+    status: "awaiting_cloud_shell",
     steps: [
       { name: "received", status: "done", at: now },
-      { name: "manual_required", status: "pending", at: now,
-        message: "GCP プロビジョン自動化は実装中。オーナーに連絡が届いて手動セットアップが入ります。" },
+      { name: "awaiting_cloud_shell", status: "pending", at: now,
+        message: "ユーザーが Cloud Shell で wizard-bootstrap.sh を実行するのを待っています。" },
     ],
     created_at: now,
     updated_at: now,
@@ -217,6 +218,7 @@ app.get("/api/wizard/runs/:id", async (req, res) => {
     estimated_monthly_jpy: d.estimated_monthly_jpy ?? null,
     github_username: d.github_username,
     user_email: d.user_email,
+    hosting_url: d.hosting_url || null,
     created_at: d.created_at?.toDate?.()?.toISOString?.() || null,
     updated_at: d.updated_at?.toDate?.()?.toISOString?.() || null,
   });
@@ -434,6 +436,163 @@ app.post("/api/github/disconnect", async (req, res) => {
     github: admin.firestore.FieldValue.delete(),
   }, { merge: true });
   console.log(JSON.stringify({ severity: "INFO", code: "github.disconnected", uid: req.user.uid }));
+  res.json({ ok: true });
+});
+
+// ──────────────────────────────────────────
+// Provisioning token + Cloud Shell ハンドオフ (Phase 2 自動セットアップ)
+//
+// 流れ:
+//   1. ユーザーが wizard で submit
+//   2. フロント: POST /api/wizard/runs/:id/provision-link で token 生成
+//   3. backend: token を Firestore に保存 (24h TTL) + Cloud Shell URL を返す
+//   4. ユーザーが Cloud Shell を開いて、表示されたコマンドを貼り付け実行:
+//        bash platform/infra/wizard-bootstrap.sh <api_url> <token>
+//   5. wizard-bootstrap.sh が:
+//        - GET /api/wizard/by-token/:token で run 情報取得
+//        - bootstrap.sh を env 渡して非対話で実行
+//        - 各ステップで POST /api/wizard/by-token/:token/status を呼ぶ
+//   6. フロントは引き続き /api/wizard/runs/:id を polling → live 進捗
+// ──────────────────────────────────────────
+const TOKENS = db.collection("wizard_provisioning_tokens");
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// token endpoints (`/api/wizard/by-token/...`) は auth middleware の
+// PUBLIC_PATH_PREFIXES で skip 済み。
+
+function genToken() {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+// repo URL を runtime に渡せるよう env から拾う (将来テンプレ repo 分離時のため)
+const TEMPLATE_REPO_URL = process.env.TEMPLATE_REPO_URL || "https://github.com/konishi0221/code_studio";
+
+// POST /api/wizard/runs/:id/provision-link — Firebase auth 必須
+// 既存トークンが期限内ならそれを返す (冪等)、なければ新規発行
+app.post("/api/wizard/runs/:id/provision-link", async (req, res) => {
+  const { snap, data: d, error } = await getRunWithAccess(req.params.id, req.user);
+  if (error) return res.status(error.status).json({ error: error.message });
+
+  // 既存有効トークンを探す
+  let token = null;
+  const existing = await TOKENS.where("run_id", "==", snap.id).limit(1).get();
+  if (!existing.empty) {
+    const t = existing.docs[0];
+    const age = Date.now() - (t.data().created_at?.toMillis?.() || 0);
+    if (age < TOKEN_TTL_MS) token = t.id;
+    else await t.ref.delete().catch(() => {});
+  }
+  if (!token) {
+    token = genToken();
+    await TOKENS.doc(token).set({
+      run_id: snap.id,
+      user_uid: d.user_uid,
+      created_at: admin.firestore.Timestamp.now(),
+      expires_at: admin.firestore.Timestamp.fromMillis(Date.now() + TOKEN_TTL_MS),
+    });
+  }
+
+  const apiBase = WIZARD_API_BASE || `${req.protocol}://${req.get("host")}`;
+  const command = `bash platform/infra/wizard-bootstrap.sh ${apiBase} ${token}`;
+  // Cloud Shell deep link — repo を clone、platform/ を作業ディレクトリ、
+  // platform/infra/cloudshell-welcome.md を表示。
+  const cloudShellUrl = "https://shell.cloud.google.com/cloudshell/editor?" + new URLSearchParams({
+    cloudshell_git_repo: TEMPLATE_REPO_URL,
+    cloudshell_workspace: "platform",
+    cloudshell_print: "platform/infra/cloudshell-welcome.md",
+    cloudshell_open_in_editor: "platform/infra/wizard-bootstrap.sh",
+  }).toString();
+
+  await logEvent(snap.id, {
+    actor: "backend", level: "info", code: "provision.link_generated",
+    message: `Cloud Shell handoff link issued`,
+    data: { token_prefix: token.slice(0, 6) + "...", expires_in_hours: 24 },
+  });
+
+  res.json({
+    token,
+    command,
+    cloud_shell_url: cloudShellUrl,
+    api_base: apiBase,
+    expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+  });
+});
+
+// Helper: token から run を解決 + access チェック
+async function resolveToken(token) {
+  if (!token || typeof token !== "string" || token.length < 16) return null;
+  const t = await TOKENS.doc(token).get();
+  if (!t.exists) return null;
+  const td = t.data();
+  const expMs = td.expires_at?.toMillis?.() || 0;
+  if (Date.now() > expMs) {
+    await t.ref.delete().catch(() => {});
+    return null;
+  }
+  const runSnap = await RUNS.doc(td.run_id).get();
+  if (!runSnap.exists) return null;
+  return { tokenDoc: t, tokenData: td, runSnap, runData: runSnap.data() };
+}
+
+// GET /api/wizard/by-token/:token — Cloud Shell の wizard-bootstrap.sh から呼ぶ
+// run の主要パラメータを返す (bootstrap.sh が環境変数に流し込めるよう)
+app.get("/api/wizard/by-token/:token", async (req, res) => {
+  const r = await resolveToken(req.params.token);
+  if (!r) return res.status(404).json({ error: "token not found / expired" });
+  // GitHub OAuth で取った login も拾う (wizard_users.{uid}.github.login)
+  let githubLogin = "";
+  try {
+    const u = await WIZARD_USERS.doc(r.tokenData.user_uid).get();
+    githubLogin = u.exists ? (u.data().github?.login || "") : "";
+  } catch {}
+  res.json({
+    run_id: r.runSnap.id,
+    user_email: r.runData.user_email || "",
+    github_login: githubLogin || r.runData.github_username || "",
+    survey: r.runData.survey || {},
+    options: r.runData.options || {},
+    estimated_monthly_jpy: r.runData.estimated_monthly_jpy ?? null,
+    status: r.runData.status,
+  });
+});
+
+// POST /api/wizard/by-token/:token/status — wizard-bootstrap.sh が各ステップで叩く
+// body: { status, step, message, level?, hosting_url? }
+app.post("/api/wizard/by-token/:token/status", async (req, res) => {
+  const r = await resolveToken(req.params.token);
+  if (!r) return res.status(404).json({ error: "token not found / expired" });
+  const b = req.body || {};
+  const VALID_STATUS = ["in_progress", "completed", "failed"];
+  const newStatus = VALID_STATUS.includes(b.status) ? b.status : null;
+  const step = String(b.step || "").slice(0, 80);
+  const message = String(b.message || "").slice(0, 500);
+  const hostingUrl = b.hosting_url ? String(b.hosting_url).slice(0, 200) : null;
+
+  const now = admin.firestore.Timestamp.now();
+  const update = { updated_at: now };
+  if (newStatus) update.status = newStatus;
+  if (hostingUrl) update.hosting_url = hostingUrl;
+  if (step) {
+    update.steps = admin.firestore.FieldValue.arrayUnion({
+      name: step,
+      status: newStatus === "failed" ? "failed" : (newStatus === "completed" ? "done" : "running"),
+      at: now,
+      message,
+    });
+  }
+  await RUNS.doc(r.runSnap.id).update(update);
+  await logEvent(r.runSnap.id, {
+    actor: "bootstrap", // wizard-bootstrap.sh からの報告
+    level: b.level || (newStatus === "failed" ? "error" : "info"),
+    code: `bootstrap.${step || "status"}`,
+    message: message || newStatus || "(empty)",
+    data: hostingUrl ? { hosting_url: hostingUrl } : null,
+  });
+  console.log(JSON.stringify({
+    severity: newStatus === "failed" ? "ERROR" : "INFO",
+    code: "bootstrap.status_update",
+    run_id: r.runSnap.id, status: newStatus, step, message,
+  }));
   res.json({ ok: true });
 });
 
