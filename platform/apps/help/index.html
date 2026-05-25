@@ -182,7 +182,7 @@ window.sendMessage = async () => {
     });
     if (!res.ok) {
       const errBody = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+      throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 1000)}`);
     }
     const data = await res.json();
     thread.push({ role: "model", text: data.reply || "(空の応答)" });
