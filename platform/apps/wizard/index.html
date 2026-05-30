@@ -117,6 +117,20 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 .cs-hint { font-size: 11px; color: var(--text2); font-weight: 600; margin-top: 8px; line-height: 1.6; }
 .cs-hint code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; font-size: 10px; }
 
+/* Welcome ステップの「始める前の準備」チェックリスト */
+.preflight { display: flex; flex-direction: column; gap: 10px; margin: 18px 0 6px; }
+.pf-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px; background: var(--bg); border-radius: 14px; box-shadow: 4px 4px 12px var(--sd), -3px -3px 10px var(--sl); cursor: pointer; transition: background 0.12s; }
+.pf-item .pf-check { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--bg); position: relative; box-shadow: inset 2px 2px 5px var(--sd), inset -1px -1px 3px var(--sl); margin-top: 2px; transition: background 0.18s; }
+.pf-item .pf-check::after { content: ""; position: absolute; top: 7px; left: 8px; width: 8px; height: 4px; border-left: 2px solid var(--bg); border-bottom: 2px solid var(--bg); transform: rotate(-45deg) scale(0); transform-origin: center; transition: transform 0.15s; }
+.pf-item.on { background: rgba(42,140,58,0.06); }
+.pf-item.on .pf-check { background: var(--accent); box-shadow: 2px 2px 6px rgba(42,140,58,0.45), inset 0 0 0 rgba(0,0,0,0); }
+.pf-item.on .pf-check::after { transform: rotate(-45deg) scale(1); border-color: white; }
+.pf-item .pf-body { flex: 1; min-width: 0; }
+.pf-item .pf-title { display: block; font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+.pf-item .pf-desc { display: block; font-size: 11px; color: var(--text2); font-weight: 500; line-height: 1.6; margin-bottom: 6px; }
+.pf-item .pf-link { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent); text-decoration: none; }
+.pf-item .pf-link:active { opacity: 0.6; }
+
 .foot { text-align: center; color: var(--text3); font-size: 11px; margin-top: 30px; font-weight: 700; letter-spacing: 0.08em; }
 
 /* 詳細ログパネル: ブロックごとにどこで詰まったか確認するための診断 console */
@@ -156,18 +170,58 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
 
   <div class="progress" id="progress"></div>
 
-  <!-- ───── Step 1: Welcome ───── -->
+  <!-- ───── Step 1: Welcome (preflight checklist) ───── -->
   <section class="card" data-step="welcome">
-    <span class="card-icon">rocket_launch</span>
-    <div class="card-title">自分の GCP で立ち上げる</div>
+    <span class="card-icon">checklist</span>
+    <div class="card-title">始める前の準備</div>
     <div class="card-sub">
-      Google ログイン → GitHub 連携 → かんたんな質問に回答。<br>
-      あとは裏で全部やります。
+      Cloud Shell で詰まらないよう、必要なものを先に揃えます。<br>
+      4 つチェック付いたら「始める」が押せます。
     </div>
-    <button class="cta primary" onclick="next()">
+
+    <div class="preflight">
+      <label class="pf-item" data-pf="gcp_project">
+        <span class="pf-check"></span>
+        <span class="pf-body">
+          <span class="pf-title">GCP プロジェクトを用意した</span>
+          <span class="pf-desc">新規作成 or 既存利用。プロジェクト ID を手元にメモしておく。</span>
+          <a class="pf-link" href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">プロジェクト作成 →</a>
+        </span>
+      </label>
+
+      <label class="pf-item" data-pf="billing">
+        <span class="pf-check"></span>
+        <span class="pf-body">
+          <span class="pf-title">GCP プロジェクトに請求アカウントを連携した</span>
+          <span class="pf-desc">これが無いと bootstrap が API 有効化で失敗。クレカ 1 枚分。</span>
+          <a class="pf-link" href="https://console.cloud.google.com/billing/linkedaccount" target="_blank" rel="noopener">請求アカウント設定 →</a>
+        </span>
+      </label>
+
+      <label class="pf-item" data-pf="gemini">
+        <span class="pf-check"></span>
+        <span class="pf-body">
+          <span class="pf-title">Gemini API キーを取得した</span>
+          <span class="pf-desc">AI ヘルプ用 (BYOK)。使った分だけ課金、無料枠あり。コピーして手元に。</span>
+          <a class="pf-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">AI Studio で取得 →</a>
+        </span>
+      </label>
+
+      <label class="pf-item" data-pf="github">
+        <span class="pf-check"></span>
+        <span class="pf-body">
+          <span class="pf-title">GitHub アカウントがある</span>
+          <span class="pf-desc">テンプレ repo を自分の所に fork するため。次のステップで連携。</span>
+          <a class="pf-link" href="https://github.com/signup" target="_blank" rel="noopener">無ければ作成 →</a>
+        </span>
+      </label>
+    </div>
+
+    <button class="cta primary" id="startBtn" disabled onclick="next()">
       <span class="icon">arrow_forward</span>
       始める
     </button>
+    <div class="cs-hint" style="text-align:center;">全部チェックすると押せるようになります</div>
   </section>
 
   <!-- ───── Step 2: Google sign-in ───── -->
@@ -472,10 +526,19 @@ const STORAGE_KEY = "wizard_state_v1";
 const STEPS = ["welcome", "google", "github", "quiz", "options", "confirm", "done"];
 
 function loadState() {
-  const defaults = { step: "welcome", quiz: {}, ghUser: "", options: defaultOptions() };
+  const defaults = {
+    step: "welcome",
+    quiz: {},
+    ghUser: "",
+    options: defaultOptions(),
+    preflight: { gcp_project: false, billing: false, gemini: false, github: false },
+  };
   try {
     const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return Object.assign({}, defaults, s, { options: Object.assign({}, defaults.options, s.options || {}) });
+    return Object.assign({}, defaults, s, {
+      options: Object.assign({}, defaults.options, s.options || {}),
+      preflight: Object.assign({}, defaults.preflight, s.preflight || {}),
+    });
   } catch { return defaults; }
 }
 
@@ -742,6 +805,8 @@ function render() {
     });
   });
   updateQuizNext();
+  // welcome ステップ: preflight チェックリストの再表示 + 「始める」ボタン状態
+  if (state.step === "welcome") renderPreflight();
   // github ステップ: OAuth 利用可否 + 連携状態に応じて UI 切り替え
   if (state.step === "github") renderGithubStep();
   // options ステップ: コスト一覧 + total
@@ -1115,6 +1180,39 @@ document.querySelectorAll("[data-q] button").forEach(btn => {
     wizardLog("debug", "quiz.choice", `${q}=${btn.dataset.v}`);
   });
 });
+
+// Welcome ステップの preflight チェックリスト: 全部 ON にしないと「始める」が押せない。
+// 「pf-link」リンクの click はトグルしない (新規タブで開きたいので)。
+document.querySelectorAll(".pf-item").forEach(item => {
+  item.addEventListener("click", (e) => {
+    // リンクのクリックは無視
+    if (e.target.closest(".pf-link")) return;
+    const key = item.dataset.pf;
+    if (!key) return;
+    state.preflight[key] = !state.preflight[key];
+    saveState();
+    item.classList.toggle("on", state.preflight[key]);
+    updateStartBtn();
+    wizardLog("debug", "preflight.toggle", `${key}=${state.preflight[key]}`);
+  });
+});
+
+function updateStartBtn() {
+  const btn = document.getElementById("startBtn");
+  if (!btn) return;
+  const need = ["gcp_project", "billing", "gemini", "github"];
+  const ok = need.every(k => state.preflight?.[k]);
+  btn.disabled = !ok;
+}
+
+function renderPreflight() {
+  // localStorage から復元した state.preflight に基づいて各行の on/off を再描画
+  document.querySelectorAll(".pf-item").forEach(item => {
+    const key = item.dataset.pf;
+    item.classList.toggle("on", !!state.preflight?.[key]);
+  });
+  updateStartBtn();
+}
 
 function updateQuizNext() {
   const need = ["skill", "goal", "industry", "team"];

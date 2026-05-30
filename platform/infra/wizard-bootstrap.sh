@@ -75,32 +75,58 @@ echo ""
 
 report_status "in_progress" "fetched_params" "wizard 入力を取得しました"
 
-# 2. GCP プロジェクト ID を確認
+# 2. GCP プロジェクト ID を確認 (= 早期 fail で詰まらないため厳格に検証)
 echo "▶ 2/6 GCP プロジェクトを確認"
+
+# 2a. gcloud 認証チェック → 未認証なら login に誘導
+ACTIVE_ACCT=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)
+if [[ -z "$ACTIVE_ACCT" ]]; then
+  echo "    ⚠️  gcloud に認証済みアカウントがありません。"
+  echo "    別ターミナルで 'gcloud auth login' を実行してから再度このスクリプトを走らせてください。"
+  report_status "failed" "gcloud_not_authenticated" "gcloud auth login が必要"
+  exit 1
+fi
+echo "    gcloud 認証: $ACTIVE_ACCT"
+
+# 2b. PROJECT_ID 入力 (gcloud config or prompt)
 if [[ -z "${PROJECT_ID:-}" ]]; then
   PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
 fi
 if [[ -z "$PROJECT_ID" ]]; then
-  echo "    現在の gcloud project が未設定です。"
-  echo "    新しいプロジェクトを作るか、既存のプロジェクト ID を入力してください。"
-  echo "    (プロジェクト一覧: gcloud projects list)"
+  echo ""
+  echo "    PROJECT_ID 未設定。既存のプロジェクト ID を貼り付けるか、"
+  echo "    https://console.cloud.google.com/projectcreate で新規作成してから貼ってください。"
+  echo "    プロジェクト一覧:"
+  gcloud projects list --format='table(projectId,name)' 2>/dev/null | head -20 || true
   read -rp "    PROJECT_ID: " PROJECT_ID
-  gcloud config set project "$PROJECT_ID" >/dev/null
 fi
-echo "    PROJECT_ID: $PROJECT_ID"
 
-# 請求アカウントが紐づいてるか軽くチェック (確実な判定はしない、警告のみ)
+# 2c. PROJECT_ID が実在するか検証 (= 「app」等の typo を即弾く)
+if ! gcloud projects describe "$PROJECT_ID" >/dev/null 2>&1; then
+  echo ""
+  echo "    ❌ プロジェクト '$PROJECT_ID' が見つかりません。"
+  echo "    確認: gcloud projects list"
+  echo "    新規作成: https://console.cloud.google.com/projectcreate"
+  report_status "failed" "project_not_found" "プロジェクト ID '$PROJECT_ID' が存在しない"
+  exit 1
+fi
+gcloud config set project "$PROJECT_ID" >/dev/null
+echo "    PROJECT_ID: $PROJECT_ID ✓"
+
+# 2d. 請求アカウント連携を厳格チェック → 無ければ abort (警告止まりにすると後の API 有効化で必ずコケる)
 BILLING_ENABLED=$(gcloud beta billing projects describe "$PROJECT_ID" --format='value(billingEnabled)' 2>/dev/null || echo "unknown")
 if [[ "$BILLING_ENABLED" != "True" && "$BILLING_ENABLED" != "true" ]]; then
   echo ""
-  echo "    ⚠️  請求アカウント未連携の可能性: $BILLING_ENABLED"
-  echo "    Cloud Console で連携してから続けてください:"
-  echo "      https://console.cloud.google.com/billing/linkedaccount?project=$PROJECT_ID"
-  read -rp "    続行しますか? (y/N) " CONFIRM_B
-  [[ "$CONFIRM_B" == "y" || "$CONFIRM_B" == "Y" ]] || { report_status "failed" "billing_not_linked" "請求未連携で中止"; exit 1; }
+  echo "    ❌ プロジェクト '$PROJECT_ID' に請求アカウントが紐付いていません ($BILLING_ENABLED)"
+  echo "    無料枠でも有効な請求アカウントが必要 (Cloud SQL / Cloud Run / Hosting 等の API)。"
+  echo "    紐付け: https://console.cloud.google.com/billing/linkedaccount?project=$PROJECT_ID"
+  echo "    紐付け完了後にもう一度このスクリプトを実行してください。"
+  report_status "failed" "billing_not_linked" "請求アカウント未連携"
+  exit 1
 fi
+echo "    請求アカウント: 連携済み ✓"
 
-report_status "in_progress" "project_confirmed" "PROJECT_ID=$PROJECT_ID"
+report_status "in_progress" "project_confirmed" "PROJECT_ID=$PROJECT_ID (billing ok)"
 
 # 3. その他必須 env を組み立て
 echo "▶ 3/6 設定値を組み立て"
