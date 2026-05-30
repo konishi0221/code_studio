@@ -200,14 +200,12 @@ let fbAuth = null;
     document.getElementById("signinBtn").addEventListener("click", async () => {
       sErr(""); sStatus("ログイン中…");
       diagLog("click signin");
-      // モバイルは popup が不安定なので redirect 一択
-      if (isMobile) {
-        try { diagLog("→ signInWithRedirect"); await signInWithRedirect(fbAuth, provider); }
-        catch (e) { diagLog(`redirect ERR ${e.code || ""} ${e.message}`); sErr((e.code || "") + " " + e.message); }
-        return;
-      }
+      // popup を先に試す。iOS Safari + redirect + 上書き authDomain では
+      // 戻り時に sessionStorage が読めず `auth/missing-initial-state` で詰む。
+      // popup ならタップ起点で iOS Safari でも通る。
+      // popup ブロック時のみ redirect に fallback (= ITP より優先する旧来挙動)。
       try {
-        diagLog("→ signInWithPopup");
+        diagLog("→ signInWithPopup (primary)");
         const res = await signInWithPopup(fbAuth, provider);
         onAuthed(res.user);
       } catch (e) {

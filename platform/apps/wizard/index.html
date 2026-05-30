@@ -1033,17 +1033,30 @@ window.signInGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
-    const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
-    if (isMobile) {
-      diagLog("→ signInWithRedirect");
-      wizardLog("info", "auth.using_redirect", "mobile UA 検出、signInWithRedirect");
-      await signInWithRedirect(fbAuth, provider);
-      // redirect の場合この行に到達しない (ページ遷移)
-    } else {
-      diagLog("→ signInWithPopup");
-      wizardLog("info", "auth.using_popup", "desktop UA、signInWithPopup");
+    // popup を最優先。iOS Safari + signInWithRedirect + 上書き authDomain の
+    // 組み合わせは Firebase Auth の sessionStorage 読み出しが死んで
+    // /__/auth/handler ページで `auth/missing-initial-state` エラーで詰む
+    // (DEPLOY.md §5-3 の ITP 回避と相性が悪い)。
+    // popup ならユーザータップ起点で iOS Safari でも通る。
+    // popup がブロックされた / サポートされない時のみ redirect に fallback。
+    diagLog("→ signInWithPopup (primary)");
+    wizardLog("info", "auth.using_popup", "popup 優先で開始");
+    try {
       const res = await signInWithPopup(fbAuth, provider);
       onAuthed(res.user);
+    } catch (popupErr) {
+      const code = popupErr.code || "";
+      const POPUP_FALLBACK_CODES = [
+        "auth/popup-blocked",
+        "auth/popup-closed-by-user",
+        "auth/cancelled-popup-request",
+        "auth/operation-not-supported-in-this-environment",
+      ];
+      if (!POPUP_FALLBACK_CODES.includes(code)) throw popupErr;
+      diagLog(`popup ${code} → signInWithRedirect`);
+      wizardLog("warn", "auth.popup_fallback_redirect", `popup ${code}, redirect に fallback (iOS Safari だと失敗するかも)`);
+      await signInWithRedirect(fbAuth, provider);
+      // redirect 成功時はこの行に到達しない (ページ遷移)
     }
   } catch (e) {
     diagLog(`ERR ${e.code || ""} ${e.message}`);
