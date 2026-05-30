@@ -423,6 +423,10 @@ body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); 
     </div>
 
     <div class="summary" id="summary2" style="margin-top:14px;"></div>
+    <button class="cta" onclick="resetWizard()">
+      <span class="icon">restart_alt</span>
+      最初からやり直す
+    </button>
     <button class="cta" onclick="location.href='/'">
       <span class="icon">home</span>
       トップに戻る
@@ -667,6 +671,20 @@ window.copyDiagLog = () => {
 window.clearDiagLog = () => {
   wizardEvents.length = 0;
   renderDiagPanel();
+};
+
+// localStorage の wizard_state_v1 を消して初期画面に戻る。
+// run の途中で詰まった / 古い state が腐ったとき用。Firebase / GitHub の
+// 連携状態 (wizard_users/{uid}) は backend 側で消さない (再ログイン時に
+// 自動で復元される)。
+window.resetWizard = () => {
+  if (!confirm("ウィザードの入力を全部消して最初からやり直しますか？\n(Google / GitHub の連携は維持されます)")) return;
+  wizardLog("info", "wizard.reset", "ユーザーが「最初からやり直す」を実行");
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  state = loadState();
+  provisionLink = null;
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  render();
 };
 
 // ───────── 画面遷移 ─────────
@@ -1351,6 +1369,13 @@ window.addEventListener("unhandledrejection", (ev) => {
   wizardLog("info", "init.start", `host=${location.hostname} api=${window.API_BASE_WIZARD || "(none)"} ua=${navigator.userAgent.slice(0,80)}`);
   // GitHub OAuth コールバック直後だったら state を github に巻き戻す (handleGithubReturn 内で)
   handleGithubReturn();
+  // 古い state の自動修復: step が "done" なのに runId が無いのは過去のバグった
+  // submit 等で stale になった状態。confirm に戻して再 submit を促す。
+  if (state.step === "done" && !state.runId) {
+    wizardLog("warn", "state.repair", `step=done なのに run_id 無し → confirm に巻き戻し`);
+    state.step = "confirm";
+    saveState();
+  }
   try {
     const cfg = await fetch("/__/firebase/init.json").then(r => r.json());
     cfg.authDomain = location.hostname; // iOS Safari ITP 対策
