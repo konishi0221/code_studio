@@ -7,6 +7,10 @@ SA: wizard-run
 HAS_DB: "false"
 HAS_BUCKET: "false"
 CLOUDBUILD: platform/apps/wizard/cloudbuild.yaml
+# wizard は SaaS のセットアップ入口なのでエンドユーザー (= 任意の Google
+# アカウント) が来ることを想定。allowlist を空にして全許可。
+# 他のアプリはデフォルトで owner 限定 (bootstrap.sh が OWNER_EMAIL を入れる)。
+OWNER_ONLY: "false"
 # Firestore access for wizard_runs collection.
 EXTRA_ROLES: roles/datastore.user
 # Rebuild wizard-api when wizard source changes. Hosting deploy of the static

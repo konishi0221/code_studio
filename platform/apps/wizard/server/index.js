@@ -35,6 +35,11 @@ const RUNS = db.collection("wizard_runs");
 
 // ──────────────────────────────────────────
 const app = express();
+// Cloud Run はリクエストを HTTPS で受けて、コンテナには X-Forwarded-Proto: https を
+// 付けた HTTP として流す。trust proxy を有効にしないと req.protocol が "http" のまま
+// になり、GitHub OAuth に渡す redirect_uri が http://... になって登録済みの
+// https://... と不一致 → "redirect_uri is not associated" で詰む。
+app.set("trust proxy", true);
 app.use(express.json({ limit: "256kb" }));
 
 app.use((req, res, next) => {

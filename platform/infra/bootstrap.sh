@@ -340,7 +340,19 @@ for APP_DIR in "$ROOT_DIR"/apps/*/; do
 
   # Trigger substitutions. Use `^||^` separator so values containing commas
   # (e.g. multi-email ALLOWED_EMAILS) are not mis-split.
-  SUBS="^||^_INVOKER=user:${OWNER_EMAIL}||_HOSTING_SITE=${HOSTING_SITE}||_ALLOWED_EMAILS=${OWNER_EMAIL}"
+  #
+  # ALLOWED_EMAILS の方針:
+  #   - help 等の owner 専用アプリ: owner email を入れて allowlist 化
+  #   - wizard: エンドユーザー (任意の Google アカウント) が来る前提なので空 (= 全許可)
+  # 新規アプリが owner 専用かどうかは app.yaml の OWNER_ONLY: "true" で宣言。
+  # 未宣言は安全側 = owner 限定。wizard だけ明示的に "false"。
+  OWNER_ONLY="${APP_OWNER_ONLY:-true}"
+  if [[ "$OWNER_ONLY" == "true" ]]; then
+    ALLOWED="${OWNER_EMAIL}"
+  else
+    ALLOWED=""
+  fi
+  SUBS="^||^_INVOKER=user:${OWNER_EMAIL}||_HOSTING_SITE=${HOSTING_SITE}||_ALLOWED_EMAILS=${ALLOWED}"
   # wizard-api だけ追加で GitHub OAuth Client ID を渡す (empty なら wizard 側で
   # OAuth ボタンが未設定表示になり、手入力 fallback に切り替わる)。
   if [[ "$APP" == "wizard" ]]; then
