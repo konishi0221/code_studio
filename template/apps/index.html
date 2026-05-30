@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>あなたのミニアプリ基盤</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@40,400,0,0">
+<style>
+.icon, .app-icon { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; display: inline-block; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 40; color: var(--text); }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #e4e6ee; --bg2: #d8dae4; --bg3: #ededf3;
+  --sl: rgba(255,255,255,1); --sd: rgba(168,172,192,0.75); --sd2: rgba(148,152,176,0.55);
+  --text: #42455e; --text2: rgba(66,69,94,0.42); --text3: rgba(66,69,94,0.22);
+}
+body { font-family: 'Outfit', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 54px 22px 0; }
+.hint-text { font-size: 11px; letter-spacing: 0.24em; color: var(--text3); text-transform: uppercase; font-weight: 700; }
+.pill-btn { padding: 9px 18px; border-radius: 30px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; color: var(--text2); font-family: 'Outfit', sans-serif; background: var(--bg); box-shadow: 5px 5px 12px var(--sd), -5px -5px 12px var(--sl); transition: all 0.12s; }
+.pill-btn:active { box-shadow: inset 3px 3px 8px var(--sd), inset -3px -3px 8px var(--sl); transform: scale(0.96); }
+.wrap { padding: 40px 22px 60px; }
+.title { font-size: 30px; font-weight: 800; margin-bottom: 6px; }
+.subtitle { font-size: 13px; color: var(--text2); font-weight: 600; margin-bottom: 32px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.app-card { position: relative; overflow: hidden; border-radius: 24px; padding: 26px 18px; background: var(--bg); cursor: pointer; text-align: center; border: none; font-family: 'Outfit', sans-serif; color: var(--text); box-shadow: 10px 10px 24px var(--sd), -8px -8px 20px var(--sl); transition: box-shadow 0.18s, transform 0.14s; }
+.app-card::before { content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 44%; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%); border-radius: 30px 30px 50% 50%; pointer-events: none; }
+.app-card:active { box-shadow: inset 7px 7px 18px var(--sd), inset -5px -5px 14px var(--sl); transform: scale(0.96); }
+.app-card.soon { opacity: 0.5; cursor: default; }
+.app-icon { font-size: 48px; line-height: 1; margin-bottom: 12px; color: color-mix(in srgb, var(--accent, var(--text)) 55%, white 45%); font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 48; }
+.app-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.app-desc { font-size: 11px; color: var(--text2); font-weight: 600; line-height: 1.5; }
+.app-badge { position: absolute; top: 12px; right: 12px; font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: var(--text3); }
+#signinOverlay { display: none; position: fixed; inset: 0; z-index: 400; background: var(--bg); flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; gap: 18px; }
+.gbtn { padding: 16px 30px; border-radius: 40px; font-size: 15px; font-weight: 700; border: none; cursor: pointer; font-family: 'Outfit', sans-serif; color: var(--text); background: var(--bg); box-shadow: 8px 8px 18px var(--sd), -6px -6px 16px var(--sl); }
+.gbtn:active { box-shadow: inset 5px 5px 12px var(--sd), inset -4px -4px 10px var(--sl); transform: scale(0.97); }
+.sub { font-size: 12px; color: var(--text2); line-height: 1.7; }
+.err { font-size: 11px; color: #b04040; font-weight: 600; max-width: 320px; word-break: break-all; }
+</style>
+</head>
+<body>
+
+<div id="app" style="display:none;">
+  <div class="top-bar">
+    <span class="hint-text">YOUR MINI APPS</span>
+    <button class="pill-btn" onclick="doSignOut()">ログアウト</button>
+  </div>
+  <div class="wrap">
+    <div class="title">アプリ</div>
+    <div class="subtitle" id="who">サインイン済み</div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<div id="signinOverlay">
+  <div class="title">アプリ</div>
+  <div class="sub">Google アカウントでログイン</div>
+  <button class="gbtn" id="signinBtn">Sign in with Google</button>
+  <div class="err" id="signinErr"></div>
+</div>
+
+<script src="/config.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+  getRedirectResult, setPersistence, browserLocalPersistence,
+  onAuthStateChanged, signOut,
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+// ───────── ミニアプリ一覧 ─────────
+// 新しいミニアプリを追加する手順:
+//   1. apps/<id>/index.html と apps/<id>/README.md を作る (1 アプリ = 1 ディレクトリ)
+//   2. 下の APPS 配列に 1 行足す
+//   3. main に push → 自動デプロイ
+// このリポジトリは wizard が立ち上げたあなた専用のスタックです。
+// soon: true で「準備中」表示。
+const APPS = [
+  { id: "help", name: "AIヘルプ", icon: "support_agent", accent: "#4961ff",
+    desc: "このシステムを知ってる Gemini と相談", path: "/help/" },
+  // ここに自分のアプリを追加していく:
+  // { id: "myapp", name: "マイアプリ", icon: "rocket", accent: "#2a8c3a",
+  //   desc: "説明", path: "/myapp/" },
+];
+
+function renderGrid() {
+  const g = document.getElementById("grid");
+  g.innerHTML = "";
+  for (const a of APPS) {
+    const card = document.createElement("button");
+    card.className = "app-card" + (a.soon ? " soon" : "");
+    if (a.accent) card.style.setProperty("--accent", a.accent);
+    card.innerHTML =
+      `<div class="app-icon">${a.icon}</div>` +
+      `<div class="app-name">${a.name}</div>` +
+      `<div class="app-desc">${a.desc}</div>` +
+      (a.soon ? `<div class="app-badge">SOON</div>` : "");
+    if (!a.soon) card.onclick = () => { location.href = a.path; };
+    g.appendChild(card);
+  }
+}
+
+let fbAuth = null;
+(async function init() {
+  const nextUrl = new URLSearchParams(location.search).get("next");
+  const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
+  try {
+    const cfg = await fetch("/__/firebase/init.json").then((r) => r.json());
+    cfg.authDomain = location.hostname; // iOS Safari ITP 対策
+    fbAuth = getAuth(initializeApp(cfg));
+    await setPersistence(fbAuth, browserLocalPersistence);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
+    try { const rr = await getRedirectResult(fbAuth); } catch (e) {}
+
+    let done = false;
+    function onAuthed(user) {
+      if (done) return; done = true;
+      if (nextUrl && nextUrl.startsWith("/")) { location.replace(nextUrl); return; }
+      document.getElementById("signinOverlay").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      document.getElementById("who").textContent = user?.email || "サインイン済み";
+      renderGrid();
+    }
+
+    document.getElementById("signinBtn").addEventListener("click", async () => {
+      // popup を先に試して、ブロックされたら redirect に fallback (iOS Safari 対策)
+      try {
+        const res = await signInWithPopup(fbAuth, provider);
+        onAuthed(res.user);
+      } catch (e) {
+        if (["auth/popup-blocked","auth/popup-closed-by-user","auth/cancelled-popup-request","auth/operation-not-supported-in-this-environment"].includes(e.code)) {
+          try { await signInWithRedirect(fbAuth, provider); }
+          catch (e2) { document.getElementById("signinErr").textContent = e2.message; }
+        } else { document.getElementById("signinErr").textContent = (e.code || "") + " " + e.message; }
+      }
+    });
+
+    onAuthStateChanged(fbAuth, (user) => {
+      if (user) onAuthed(user);
+      else document.getElementById("signinOverlay").style.display = "flex";
+    });
+  } catch (e) {
+    document.getElementById("signinOverlay").style.display = "flex";
+    document.getElementById("signinErr").textContent = "init失敗: " + e.message;
+  }
+})();
+
+window.doSignOut = async () => {
+  if (fbAuth) await signOut(fbAuth);
+  location.reload();
+};
+</script>
+</body>
+</html>

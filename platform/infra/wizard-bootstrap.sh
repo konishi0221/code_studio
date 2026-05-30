@@ -165,6 +165,52 @@ if [[ -z "${GEMINI_API_KEY:-}" ]]; then
   export GEMINI_API_KEY
 fi
 
+# 3b. user の options に応じて template/apps/ をフィルタ
+# 各 app の app.yaml に "REQUIRES_OPTIONS: <key>" があれば、
+# user が options.<key>=true を選んでない時はそのアプリを削除する。
+# template/ が user の repo に rename される前提なので、ここで in-place 編集して OK。
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+TEMPLATE_DIR="$REPO_ROOT/template"
+
+if [[ ! -d "$TEMPLATE_DIR/apps" ]]; then
+  echo ""
+  echo "    ❌ $TEMPLATE_DIR/apps が見つかりません。リポ構成が変わってる可能性。"
+  report_status "failed" "template_missing" "template/apps が無い"
+  exit 1
+fi
+
+echo ""
+echo "    [filter] template/apps/ を user options で絞り込み"
+SKIPPED=()
+KEPT=()
+for app_dir in "$TEMPLATE_DIR"/apps/*/; do
+  [[ -d "$app_dir" ]] || continue
+  app=$(basename "$app_dir")
+  yaml="${app_dir}app.yaml"
+  if [[ ! -f "$yaml" ]]; then
+    # app.yaml 無し = 静的のみ。常時 include
+    KEPT+=("$app (static only)")
+    continue
+  fi
+  req=$(grep -E '^REQUIRES_OPTIONS:' "$yaml" | head -1 | sed -E 's/^REQUIRES_OPTIONS:[[:space:]]*//' | tr -d '"' | tr -d ' ')
+  if [[ -z "$req" ]]; then
+    KEPT+=("$app")
+    continue
+  fi
+  val=$(echo "$RUN_JSON" | jq -r ".options.${req} // false")
+  if [[ "$val" == "true" ]]; then
+    KEPT+=("$app (options.$req=on)")
+  else
+    SKIPPED+=("$app (options.$req=off)")
+    rm -rf "$app_dir"
+  fi
+done
+
+echo "    keep:    ${KEPT[*]:-(none)}"
+echo "    skip:    ${SKIPPED[*]:-(none)}"
+report_status "in_progress" "apps_filtered" "kept=[$(IFS=,; echo "${KEPT[*]}")] skip=[$(IFS=,; echo "${SKIPPED[*]}")]"
+
 report_status "in_progress" "env_ready" "セットアップに必要な env を準備済"
 
 # 4. 確認 → 実行
@@ -176,13 +222,12 @@ if [[ "$CONFIRM" == "n" || "$CONFIRM" == "N" ]]; then
   exit 1
 fi
 
-# 5. bootstrap.sh 実行
+# 5. bootstrap.sh 実行 (template/ の方を使う = user のスタックだけプロビジョン)
 echo ""
 echo "▶ 5/6 GCP プロビジョン実行 (3〜10 分)"
-report_status "in_progress" "running_bootstrap" "bootstrap.sh 実行開始"
+report_status "in_progress" "running_bootstrap" "template/infra/bootstrap.sh 実行開始"
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-if bash "$SCRIPT_DIR/bootstrap.sh"; then
+if bash "$TEMPLATE_DIR/infra/bootstrap.sh"; then
   report_status "in_progress" "bootstrap_done" "GCP リソース作成完了。Cloud Build トリガが初回ビルドを開始"
 else
   report_status "failed" "bootstrap_failed" "bootstrap.sh が失敗しました。出力を確認してください"

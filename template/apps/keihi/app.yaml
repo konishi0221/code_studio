@@ -1,0 +1,12 @@
+# keihi : 経費管理ミニアプリ (スターター・スカフォールド)
+# Consumed by infra/bootstrap.sh.
+name: keihi
+display_name: 経費管理
+SERVICE: keihi-api
+SA: keihi-run
+HAS_DB: "true"
+HAS_BUCKET: "true"
+CLOUDBUILD: template/apps/keihi/cloudbuild.yaml
+# wizard が options で cloudsql=true を選んだ時だけ user の repo に残す。
+# OFF だと wizard-bootstrap.sh のフィルタで apps/keihi/ ごと削除される。
+REQUIRES_OPTIONS: cloudsql

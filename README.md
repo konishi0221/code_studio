@@ -28,15 +28,20 @@ claude-studio/
 │   ├── CLAUDE.md
 │   ├── DEPLOY.md
 │   └── README.md
-└── template/          ← 各ユーザーの GCP に wizard が生成する配布テンプレ（未着手）
+└── template/          ← wizard がユーザーの GCP に展開するスターターテンプレ (β: 構造完成、別 repo 化はこれから)
+    ├── apps/                  ← user 公開ルート (help / memo / keihi 等)
+    ├── infra/                 ← bootstrap.sh / db.sh / deploy-hosting.sh (user 側)
+    ├── firebase.json
+    ├── CLAUDE.md              ← user 側 Claude Code 用ルール
+    └── README.md
 ```
 
 ### 2 つのレイヤを区別する
 
 | レイヤ | 何 | デプロイ先 |
 |---|---|---|
-| **`platform/`** | claude-studio 運営本体。ランディングページ・wizard UI・AI ヘルプ等を載せる Web 本体 | 運営側 GCP プロジェクト |
-| **`template/`** (未着手) | wizard が各ユーザーの GCP に展開する初期テンプレ。最終的にはユーザーが Claude Code で日々編集する場 | 各ユーザーの GCP プロジェクト |
+| **`platform/`** | claude-studio 運営本体。LP / wizard / 内部デバッグ launcher を載せる Web 本体 | 運営側 GCP プロジェクト |
+| **`template/`** (β) | wizard が各ユーザーの GCP に展開する初期テンプレ。最終的にはユーザーが Claude Code で日々編集する場。`apps/<x>/app.yaml` の `REQUIRES_OPTIONS:` で wizard の選択肢 (Cloud SQL 等) に応じた条件付き同梱が可能 | 各ユーザーの GCP プロジェクト |
 
 ## 開発の進め方
 

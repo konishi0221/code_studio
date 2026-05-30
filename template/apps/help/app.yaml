@@ -1,0 +1,17 @@
+# help : AIヘルプチャット (このシステムを知ってる Gemini)
+# Consumed by infra/bootstrap.sh to provision per-app resources.
+name: help
+display_name: AIヘルプ
+SERVICE: help-api
+SA: help-run
+HAS_DB: "false"
+HAS_BUCKET: "false"
+CLOUDBUILD: platform/apps/help/cloudbuild.yaml
+# Rebuild help-api when the Gemini knowledge base (.md) or other static
+# pages under apps/ change. help's cloudbuild deploys the whole apps/
+# directory to Hosting, so it doubles as the Hosting deploy trigger for
+# the LP and debug launcher.
+# wizard/** intentionally NOT included here — apps/wizard has its own
+# cloudbuild + trigger that also deploys Hosting (avoids double builds).
+# Paths are relative to the platform/ directory.
+EXTRA_TRIGGER_FILES: CLAUDE.md README.md DEPLOY.md apps/index.html apps/config.js apps/debug/**

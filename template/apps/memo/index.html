@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メモ</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, sans-serif; background: #f7f8fa; color: #333; min-height: 100vh; padding: 24px 16px; }
+.wrap { max-width: 640px; margin: 0 auto; }
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+h1 { font-size: 22px; font-weight: 800; }
+.back { background: white; border: 1px solid #ddd; padding: 6px 12px; border-radius: 18px; font-size: 12px; color: #666; text-decoration: none; }
+textarea { width: 100%; min-height: 360px; padding: 16px; border: 1px solid #ddd; border-radius: 12px; background: white; font-family: ui-monospace, Menlo, monospace; font-size: 14px; line-height: 1.6; resize: vertical; }
+.hint { font-size: 11px; color: #999; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>メモ</h1>
+    <a class="back" href="/">← トップ</a>
+  </header>
+  <textarea id="m" placeholder="ここに自由にメモを書く。リロード後も残ります (ブラウザ localStorage)。"></textarea>
+  <div class="hint">このアプリは localStorage に保存するだけのスカフォールド。Claude Code に頼んで Firestore や Cloud SQL に切替可能。</div>
+</div>
+<script>
+const m = document.getElementById("m");
+m.value = localStorage.getItem("memo:v1") || "";
+m.addEventListener("input", () => localStorage.setItem("memo:v1", m.value));
+</script>
+</body>
+</html>
