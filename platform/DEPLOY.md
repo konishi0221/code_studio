@@ -218,6 +218,8 @@ sleep 180   # 反映に最大 7 分かかる
 
 **前提**: Cloud Console の OAuth クライアントの「承認済みリダイレクト URI」に `https://<HOSTING_SITE>.web.app/__/auth/handler` を**手動で**追加が必要。無いと Google ログイン画面で `redirect_uri_mismatch` で蹴られる。
 
+**追加注意**: 上書き `authDomain` + `signInWithRedirect` は iOS Safari で `auth/missing-initial-state` を頻発させる (戻り時に sessionStorage 読めない)。**popup を先に試して、blocked 時のみ redirect に fallback** する。ユーザータップ起点なら iOS Safari でも popup は通る。`apps/wizard/` と `apps/debug/` がこのパターン。
+
 ---
 
 ## 6. よくある誤解
